@@ -34,6 +34,7 @@ def bbox(arr):
 #   挑选：离自家楼近、少被前面的楼遮挡（头要露出来）、少挡住自家楼、站在楼前方，彼此拉开距离
 #   每个站位给一个排序深度：在所有「挡住它的楼」之前、所有「被它挡住的楼」之后
 MON_W, MON_H = 36, 56     # 怪兽身体在画面上的大致范围（脚底中点向上）
+STAND_MAX = 4             # 每栋楼最多几个站位（同楼第 5 只起才会叠在一起）
 
 def slot_depth(k):
     x, y, w, d = R.SLOTS[k][:4]
@@ -61,6 +62,7 @@ def pick_stands(layers):
         x, y, w, d = foot[k]
         return max(x - sx, 0, sx - (x + w)) + max(y - sy, 0, sy - (y + d))
 
+    own_total = [max(1, int((layers[(k, 0)][:, :, 3] > 0).sum())) for k in range(len(foot))]
     chosen = []
     out = [None] * len(foot)
     # 后排楼先挑（可选位置少），前排楼后挑
@@ -81,30 +83,40 @@ def pick_stands(layers):
                     hid = cover(sx, sy, [q for q in range(len(foot)) if front_of(sx, sy, q)])
                     if hid > tol:
                         continue
-                    own = 0 if front_of(sx, sy, k) else cover(sx, sy, [k])
+                    # 挡住自家楼的比例：超过 1/4 才罚，挡得越多罚得越重（矮楼别被自家怪兽整栋挡住）
+                    own = 0 if front_of(sx, sy, k) else cover(sx, sy, [k]) / own_total[k]
+                    if own > 0.4:
+                        continue
                     px, py = R.P(sx, sy, 0)
-                    score = hid / 25 + own / 40 + dd - 0.1 * (sx + sy - (x + y))
+                    score = hid / 25 + max(0, own - 0.25) * 80 + dd - 0.1 * (sx + sy - (x + y))
                     cands.append((score, round(px), round(py), sx, sy))
             cands.sort()
             mine = []
             for _, px, py, sx, sy in cands:
                 # 同一栋楼的两个站位间隔 ≥ 30，和别的楼的站位间隔 ≥ 24
+                # 第 3、4 个站位要挨着第一个（不跑到别的楼那边去）
+                if len(mine) >= 2 and abs(px - mine[0][0]) + abs(py - mine[0][1]) > 50:
+                    continue
                 if all(abs(px - qx) + abs(py - qy) >= 30 for qx, qy, *_ in mine) and \
                    all(abs(px - qx) + abs(py - qy) >= 24 for qx, qy, *_ in chosen):
                     mine.append((px, py, sx, sy))
-                if len(mine) == 2:
+                if len(mine) == STAND_MAX:
                     break
-            if len(mine) == 2:
+            if len(mine) >= 2:
                 break
-        assert len(mine) == 2, f"楼位 {k} 找不到 2 个站位"
+        assert len(mine) >= 2, f"楼位 {k} 找不到 2 个站位"
         chosen += mine
         res = []
         for px, py, sx, sy in mine:
-            ahead = [slot_depth(q) for q in range(len(foot)) if front_of(sx, sy, q)]
-            behind = [slot_depth(q) for q in range(len(foot)) if not front_of(sx, sy, q)]
+            # 只有画面上和怪兽重叠的楼才约束前后：挡住它的楼要在它之后画，被它挡住的楼在它之前画
+            near = [q for q in range(len(foot)) if cover(sx, sy, [q]) > 0]
+            ahead = [slot_depth(q) for q in near if front_of(sx, sy, q)]
+            behind = [slot_depth(q) for q in near if not front_of(sx, sy, q)]
             lo = max(behind, default=-1e9)
             hi = min(ahead, default=1e9)
-            dep = (lo + hi) / 2 if lo < hi and hi < 1e9 and lo > -1e9 else (lo + 0.5 if hi >= 1e9 else hi - 0.5)
+            assert lo < hi, f"楼位 {k} 站位 ({sx},{sy}) 前后关系冲突：要在 {lo} 之后、{hi} 之前"
+            # 没约束时用世界坐标 x+y（和楼的 depth 同一尺度），再夹进约束区间
+            dep = min(max(sx + sy, lo + 0.01), hi - 0.01)
             res.append((px, py, round(dep, 2)))
         out[k] = res
     return out
@@ -170,8 +182,9 @@ def pixelize(sheet):
     tmp = tempfile.mkdtemp(prefix="kaiju-px-")
     subprocess.run([sys.executable, "-I", os.path.join(ART, "pixelize.py"), os.path.join(ROOT, sheet), tmp, str(SPRITE_H), "--poses", str(len(FRAMES))],
                    check=True, capture_output=True)
+    n = len([f for f in os.listdir(tmp) if f.startswith("frame")])
+    assert n == len(FRAMES), f"{sheet}: 切出 {n} 个姿势，应为 {len(FRAMES)}"
     frames = [np.asarray(Image.open(f"{tmp}/frame{k}.png").convert("RGBA")) for k in range(len(FRAMES))]
-    assert not os.path.exists(f"{tmp}/frame{len(FRAMES)}.png"), f"{sheet}: 姿势数不是 {len(FRAMES)}"
     shutil.rmtree(tmp)
     return dict(zip(FRAMES, frames))
 
@@ -224,13 +237,16 @@ def build_monsters(manifest):
         for mode in MODES:
             conv = (lambda a: a) if mode == "day" else to_night
             for k in FRAMES:
-                save2x(in_box(conv(fr[k]), bw, bh), f"{OUT}/{mode}/monsters/{mid}/{k}.png")
+                img = conv(fr[k])   # 夜景逐像素转换较慢，每帧只算一次
+                save2x(in_box(img, bw, bh), f"{OUT}/{mode}/monsters/{mid}/{k}.png")
                 # 头像 48×48 原尺寸保存：按 24 逻辑像素显示时 1 美术像素 = 1 设备像素
-                save1x(Image.fromarray(head_crop(conv(fr[k]), 48), "RGBA"), f"{OUT}/{mode}/monsters/{mid}/head-{k}.png")
+                save1x(Image.fromarray(head_crop(img, 48), "RGBA"), f"{OUT}/{mode}/monsters/{mid}/head-{k}.png")
                 # 名册大头像：和快讯同样 32×32 紧裁（脸撑满），3 倍导出 96px，按 48 逻辑像素显示
-                save2x(head_crop(conv(fr[k]), 32), f"{OUT}/{mode}/monsters/{mid}/avatar-{k}.png", 3)
+                save2x(head_crop(img, 32), f"{OUT}/{mode}/monsters/{mid}/avatar-{k}.png", 3)
+                if k == "roar":
+                    roar = img
             # 快讯大头像：咆哮帧头部 32×32，2 倍导出，按 32 逻辑像素显示
-            save2x(head_crop(conv(fr["roar"]), 32), f"{OUT}/{mode}/monsters/{mid}/face-roar.png")
+            save2x(head_crop(roar, 32), f"{OUT}/{mode}/monsters/{mid}/face-roar.png")
             if mode == "day":
                 sprites[mid] = {k: in_box(fr[k], bw, bh) for k in FRAMES}
         entry["avatars"] = {k: f"monsters/{mid}/avatar-{k}.png" for k in FRAMES}
@@ -390,8 +406,8 @@ def check_image(manifest, layers, sprites):
         layer = Image.new("RGBA", (R.W, R.H), (0, 0, 0, 0))
         layer.alpha_composite(Image.fromarray(img), (pos["x"] - sp["ax"], pos["y"] - sp["ay"]))
         items.append((pos["depth"], layer))
-    # 楼按 depth，怪兽一律在楼之上（与 city.js 一致）
-    items = [(0, d, img) for d, img in items[:len(slots)]] + [(1, d, img) for d, img in items[len(slots):]]
+    # 楼和怪兽按 depth 统一从后往前叠（与 city.js 一致）
+    items = [(d, 0, img) for d, img in items[:len(slots)]] + [(d, 1, img) for d, img in items[len(slots):]]
     for _, _, img in sorted(items, key=lambda t: (t[0], t[1])):
         canvas.alpha_composite(img)
     strip = Image.new("RGBA", (R.W, R.H), (245, 245, 244, 255))

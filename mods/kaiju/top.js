@@ -5,20 +5,10 @@ import { div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, panes, agents, run, openOverlay, shared, layout } from "herdr";
 import M from "./manifest.js";
-import { asset, assign, monsterOf, slotOf, slotColor, isNight } from "./state.js";
+import { asset, assign, monsterOf, slotOf, slotColor, shadowColor, FACE, find } from "./state.js";
 import { miniBuilding, BADGE } from "./roster.js";
 
-const FACE = { idle: "idle", working: "smash", done: "roar", blocked: "wave" };
 const stop = (_e, cx) => cx.stop_propagation();
-
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
-}
 
 // 两个 #rrggbb 颜色混合，k = b 的占比
 export function mix(a, b, k) {
@@ -50,7 +40,7 @@ export function top(view, t) {
   const ps = panes();
   const ags = agents();
   const color = slotColor(space ? slotOf(space.id) : null);
-  const shadow = isNight(t) ? "#00000099" : "#2b262033";
+  const shadow = shadowColor(t);
 
   // 像素硬阴影包一层：右下错位 2px
   const hard = (id, el) => div().id(id).relative().flex_none().pr(2).pb(2)

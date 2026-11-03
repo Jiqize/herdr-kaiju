@@ -148,8 +148,10 @@ export function city(view, t, cx) {
   // 楼和怪兽按真实前后关系从后往前叠：站位的 depth 已算好（挡住它的楼在前、被它挡的楼在后），怪兽脚踏实地
   const items = [];
   for (const s of M.slots) items.push({ depth: s.depth, order: 0, slot: s });
-  for (const it of shown) items.push({ depth: it.pos.depth, order: 1, mon: it });
-  items.sort((x, y) => x.depth - y.depth || x.order - y.order);
+  // 走路中的怪兽（入场、换位、退场）路线横穿街区，画在最上层，免得半路钻进楼后面
+  // 深度相同时，脚在画面上更低的（更靠前）后画
+  for (const it of shown) items.push({ depth: it.walking ? Infinity : it.pos.depth, order: 1, y: it.pos.y, mon: it });
+  items.sort((x, y) => x.depth - y.depth || x.order - y.order || (x.y ?? 0) - (y.y ?? 0));
 
   const stage = div().relative().w(W).h(H).child(layer(t, "plate.png"));
   for (const it of items) {
@@ -196,24 +198,27 @@ export function city(view, t, cx) {
         .child(fx(t, "arrow"))));
   }
 
-  // 点击区域：楼按 depth 从后往前叠，前面的楼优先；怪兽的点击区域在楼之上
+  // 点击区域：和画面同样的前后顺序叠放（挡在怪兽前面的楼优先），走路中的怪兽不可点
   const stop = (_e, cx) => cx.stop_propagation();
-  for (const s of [...M.slots].sort((a, b) => a.depth - b.depth)) {
+  for (const it of items) {
+    if (it.mon) {
+      const { a, b, walking } = it.mon;
+      if (walking) continue;
+      const m = monsterOf(mids.get(a.address));
+      const h = SP.h - m.top;
+      stage.child(div().id(`mhit-${a.address}`).absolute().left(b.spot.x - 18).top(b.spot.y - h).w(36).h(h)
+        .cursor_pointer().tooltip(`${m.name} · ${a.program?.name ?? a.app ?? "Agent"} · ${STATUS_TEXT[a.status] ?? ""}`)
+        .on_mouse_down("left", stop)
+        .on_click(() => a.pane && run("pane.focus", { pane: a.pane })));
+      continue;
+    }
+    const s = it.slot;
     const sp = list[s.i];
     if (!sp) continue;
     stage.child(div().id(`hit-${s.i}`).absolute().left(s.hit.x).top(s.hit.y).w(s.hit.w).h(s.hit.h)
       .cursor_pointer().tooltip(sp.name)
       .on_mouse_down("left", stop)
       .on_click(() => run("space.select", { id: sp.id })));
-  }
-  for (const { a, b, walking } of shown) {
-    if (walking) continue;
-    const m = monsterOf(mids.get(a.address));
-    const h = SP.h - m.top;
-    stage.child(div().id(`mhit-${a.address}`).absolute().left(b.spot.x - 18).top(b.spot.y - h).w(36).h(h)
-      .cursor_pointer().tooltip(`${m.name} · ${a.program?.name ?? a.app ?? "Agent"} · ${STATUS_TEXT[a.status] ?? ""}`)
-      .on_mouse_down("left", stop)
-      .on_click(() => a.pane && run("pane.focus", { pane: a.pane })));
   }
   return div().size_full().flex().justify_center().pt(8).child(stage);
 }

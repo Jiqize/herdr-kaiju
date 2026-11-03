@@ -48,14 +48,16 @@ def split(gap):
         spans.append((start, len(cols) - 1))
     return [s for s in spans if s[1] - s[0] > im.width * 0.03]
 
-# --poses N：已知姿势数时，姿势间空白很窄也能切开（间隙阈值从大往小试，直到正好 N 段）
+# --poses N：已知姿势数时，间隙阈值自动调整到正好切出 N 段（姿势间空白很窄、或姿势内部有空隙都能处理）
 POSES = int(sys.argv[sys.argv.index("--poses") + 1]) if "--poses" in sys.argv else None
 gap = max(8, im.width // 120)
 spans = split(gap)
-if POSES:
-    while len(spans) != POSES and gap > 0:
-        gap -= 1
-        spans = split(gap)
+if POSES and len(spans) != POSES:
+    # 段数不对时，间隙阈值从默认值往两边找（太多段 → 调大合并，太少段 → 调小切开）
+    for g in sorted(range(0, 120), key=lambda g: abs(g - gap)):
+        if len(split(g)) == POSES:
+            gap, spans = g, split(g)
+            break
 
 # 每个姿势的上下边界
 boxes = []

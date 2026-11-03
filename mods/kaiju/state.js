@@ -17,6 +17,22 @@ export function isNight(t) {
   return 0.299 * r + 0.587 * g + 0.114 * b < 110;
 }
 
+// 像素硬阴影的颜色
+export const shadowColor = (t) => (isNight(t) ? "#00000099" : "#2b262033");
+
+// 状态 → 头像表情帧
+export const FACE = { idle: "idle", working: "smash", done: "roar", blocked: "wave" };
+
+// 在布局树里按 id 找节点
+export function find(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) {
+    const found = find(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
 export const asset = (t, name) => `${ASSETS}/${isNight(t) ? "night" : "day"}/${name}`;
 
 // space 按顺序占前 8 个楼位；之后的不上沙盘
@@ -150,9 +166,11 @@ export function behaviors(list) {
     }
     const k = perSlot.get(slot) ?? 0;
     perSlot.set(slot, k + 1);
+    // 每栋楼有 2~4 个站位；更多的怪兽轮流用这些站位，每轮往画面前方（下方）挪一点
     const st = M.slots[slot].stand;
-    const p = st[Math.min(k, st.length - 1)];
-    const spot = { x: p.x + Math.max(0, k - st.length + 1) * 14, y: p.y, depth: p.depth };
+    const p = st[k % st.length];
+    const round = Math.floor(k / st.length);
+    const spot = { x: p.x, y: p.y + round * 6, depth: p.depth + round * 12 };
     out.set(a.address, { mode, spot, slot, bubble: BUBBLE[mode] ?? null });
   }
   return out;

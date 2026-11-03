@@ -5,27 +5,17 @@ import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, agents, run, openOverlay, window, layout, shared, setShared } from "herdr";
 import M from "./manifest.js";
-import { asset, assign, monsterOf, slotOf, slotColor, isNight, STATUS_TEXT } from "./state.js";
+import { asset, assign, monsterOf, slotOf, slotColor, isNight, shadowColor, FACE, find, STATUS_TEXT } from "./state.js";
 
 export const WIDE = 400;
 export const RAIL = 76;
 
 // 状态 → 头像表情帧
-const FACE = { idle: "idle", working: "smash", done: "roar", blocked: "wave" };
 // 状态徽章颜色（像素风纯色块）
 export const BADGE = { working: "#e07a3c", done: "#d9573f", blocked: "#d8a548" };
 
 const hotkey = (i) => (i < 9 ? `⌃${i + 1}` : "");
 const stop = (_e, cx) => cx.stop_propagation();
-
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
-}
 
 export const sidebarOpen = () => (find(layout(), "sidebar")?.size?.px ?? WIDE) >= 160;
 
@@ -180,11 +170,18 @@ function damageBar(t, lvl, P) {
     .child(div().text_size(12).text_color(P.label).child(DAMAGE[lvl]));
 }
 
-// 档案纸的配色（白天牛皮纸 / 夜晚深棕）
+// 48px 怪兽头像（随状态换表情），放在楼色淡底里；拆楼中轻轻抖（原生 loop）
+function avatarBox(t, a, m, id) {
+  let avatar = image(asset(t, m.avatars[FACE[a.status] ?? "idle"])).w(48).h(48);
+  if (a.status === "working") avatar = div().id(id).relative().loop("left", { from: -1, to: 1, period: 220 }).child(avatar);
+  return div().size(48).bg(`${slotColor(slotOf(a.space))}40`).overflow_hidden().child(avatar);
+}
+
+// 档案纸的配色（白天牛皮纸 / 夜晚深棕）；photo = 照片白边（夜里压暗，不刺眼）
 function paperOf(t) {
   return isNight(t)
-    ? { paper: "#2b2721", tab: "#3a3328", line: "#5a4a35", ink: "#e9dcc0", label: "#a8987a" }
-    : { paper: "#f3e7c9", tab: "#e6d2a3", line: "#9c7b4e", ink: "#3b2f20", label: "#8a7350" };
+    ? { paper: "#2b2721", tab: "#3a3328", line: "#5a4a35", ink: "#e9dcc0", label: "#a8987a", photo: "#b8ad98" }
+    : { paper: "#f3e7c9", tab: "#e6d2a3", line: "#9c7b4e", ink: "#3b2f20", label: "#8a7350", photo: "#ffffff" };
 }
 
 // 状态印章：文字 + 颜色
@@ -202,11 +199,9 @@ function card(t, a, mid, tab, now, dmg, stat, no) {
   const P = paperOf(t);
   const m = monsterOf(mid);
   const slot = slotOf(a.space);
-  const color = slotColor(slot);
-  const face = FACE[a.status] ?? "idle";
   const what = task(a);
   const time = timer(a, tab, now);
-  const shadow = isNight(t) ? "#00000099" : "#2b262033";
+  const shadow = shadowColor(t);
   const edge = a.focused ? t.input : P.line;
   const [stampText, stampColor] = STAMP[a.status] ?? STAMP.idle;
 
@@ -214,13 +209,10 @@ function card(t, a, mid, tab, now, dmg, stat, no) {
     .child(div().w(28).flex_none().whitespace_nowrap().text_size(12).text_color(P.label).child(label))
     .child(typeof value === "string" ? div().min_w(0).truncate().text_size(12).text_color(color).child(value) : value);
 
-  let avatar = image(asset(t, m.avatars[face])).w(48).h(48);
-  // 拆楼中：头像轻轻抖（原生 loop）
-  if (a.status === "working") avatar = div().id(`ava-${a.address}`).relative().loop("left", { from: -1, to: 1, period: 220 }).child(avatar);
   // 照片：白边相纸（1px 线 + 2px 白边）里正好放 48 头像，回形针别在左上
   const [cw, ch] = M.fxSize.clip;
-  const photo = div().relative().size(54).flex_none().bg("#ffffff").border(1).border_color(P.line).p(2)
-    .child(div().size(48).bg(`${color}40`).overflow_hidden().child(avatar))
+  const photo = div().relative().size(54).flex_none().bg(P.photo).border(1).border_color(P.line).p(2)
+    .child(avatarBox(t, a, m, `ava-${a.address}`))
     .child(div().absolute().left(5).top(-5).child(image(asset(t, M.fx.clip)).w(cw).h(ch)));
 
   const stamp = div().flex_none().px(3).border(2).border_color(stampColor).bg(`${stampColor}1a`)
@@ -265,21 +257,16 @@ function card(t, a, mid, tab, now, dmg, stat, no) {
 function tile(t, a, mid, what) {
   const P = paperOf(t);
   const m = monsterOf(mid);
-  const color = slotColor(slotOf(a.space));
-  const face = FACE[a.status] ?? "idle";
   const edge = a.focused ? t.input : BADGE[a.status] ?? P.line;
-  const shadow = isNight(t) ? "#00000099" : "#2b262033";
-  let avatar = image(asset(t, m.avatars[face])).w(48).h(48);
-  if (a.status === "working") avatar = div().id(`tava-${a.address}`).relative().loop("left", { from: -1, to: 1, period: 220 }).child(avatar);
   return div().id(`tile-${a.address}`).relative().flex_none().pr(2).pb(2).cursor_pointer()
     .tooltip(`${m.name} · ${progName(a)} · ${STATUS_TEXT[a.status] ?? "睡觉中"}${what ? ` · ${what}` : ""}`)
     .on_mouse_down("left", stop)
     .on_click(() => run("pane.focus", { pane: a.pane }))
-    .child(div().absolute().left(2).top(2).right(0).bottom(0).bg(shadow))
+    .child(div().absolute().left(2).top(2).right(0).bottom(0).bg(shadowColor(t)))
     // 56 = 2px 状态色边框 + 2px 白边 + 48 头像
-    .child(div().size(56).bg("#ffffff").border(2).border_color(edge).p(2)
+    .child(div().size(56).bg(P.photo).border(2).border_color(edge).p(2)
       .hover((st) => st.border_color(t.input))
-      .child(div().size(48).bg(`${color}40`).overflow_hidden().child(avatar)));
+      .child(avatarBox(t, a, m, `tava-${a.address}`)));
 }
 
 // 名册显示模式：file = 档案卡（大）、mini = 头像小方块；存在 shared 里，重启不丢
@@ -321,7 +308,7 @@ export function roster(view, t, cx) {
   const lights = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen;
 
   if (!sidebarOpen()) {
-    const tile = (s, i) => {
+    const railTile = (s, i) => {
       const light = statusLight(t, s.status);
       return div().id(`rail-${s.id}`).relative().size(48).flex_none().flex().items_center().justify_center().cursor_pointer()
         .when(s.active, (el) => el.bg(t.selected).border(2).border_color(t.input))
@@ -335,7 +322,7 @@ export function roster(view, t, cx) {
     };
     return v_flex().size_full().items_center().pt(lights ? 50 : 12).pb(12).gap(6)
       .child(v_flex().id("rail-list").flex_1().min_h(0).w_full().items_center().gap(6).overflow_y_scrollbar()
-        .children(spaces().map(tile)))
+        .children(spaces().map(railTile)))
       .child(button(t, "rail-new", "mods/workspace-chrome/plus.svg", "新建 space", () => run("space.new")))
       .child(button(t, "rail-settings", "mods/workspace-chrome/settings.svg", "设置", () => run("app.settings")))
       .child(button(t, "rail-open", "mods/workspace-chrome/chevron-right.svg", "展开（⌘B）", toggleSidebar));
