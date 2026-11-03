@@ -1,5 +1,5 @@
 // Kaiju City 的纯逻辑：素材路径、昼夜判断、space→楼位映射、楼的损坏程度
-import { spaces } from "herdr";
+import { spaces, shared, setShared } from "herdr";
 import M from "./manifest.js";
 
 const ASSETS = "mods/kaiju/assets";
@@ -33,16 +33,16 @@ const workingSince = (s) => {
   return ts.length ? Math.min(...ts) : null;
 };
 
-// 按 space 状态算出「应有」的损坏程度：working 按时长 0/1/2，done = 3（废墟），
-// blocked 保持现状，idle / 无 Agent 目标为 0（由 Damage 逐级修复）
-function target(s, now, prev) {
-  if (s.status === "done") return 3;
-  if (s.status === "blocked") return prev;
-  if (s.status === "working") {
+// 按 space 里各 Agent 的状态算出「应有」的损坏程度（不用 space.status：blocked 会盖过 done）：
+// 有 done = 3（废墟）；有 working 按时长 0/1/2；只有 blocked 保持现状；其余目标为 0（由 Damage 逐级修复）
+function target(s, st, now, prev) {
+  if (st.has("done")) return 3;
+  if (st.has("working")) {
     const since = workingSince(s);
     const e = since == null ? 0 : now - since;
     return e >= HEAVY_AFTER ? 2 : e >= LIGHT_AFTER ? 1 : 0;
   }
+  if (st.has("blocked")) return prev;
   return 0;
 }
 
@@ -54,16 +54,23 @@ export class Damage {
   }
 
   // 返回 Map<spaceId, 0..3>，并按需预约下一次重绘
-  update(cx) {
+  // list：当前 Agent 列表（agents() 或演示数据）
+  update(cx, list) {
     const now = Date.now();
+    const bySpace = new Map();
+    for (const a of list) {
+      if (!bySpace.has(a.space)) bySpace.set(a.space, new Set());
+      bySpace.get(a.space).add(a.status);
+    }
     let next = Infinity;
     const live = new Set();
     for (const s of spaces()) {
       live.add(s.id);
       const prev = this.level.get(s.id) ?? 0;
-      const want = target(s, now, prev);
+      const st = bySpace.get(s.id) ?? new Set();
+      const want = target(s, st, now, prev);
       let cur = want;
-      if (want < prev && s.status !== "working") {
+      if (want < prev && !st.has("working")) {
         // 修复：一级一级降，每级 REPAIR_STEP
         const at = this.repairAt?.get(s.id);
         if (at == null) {
@@ -80,7 +87,7 @@ export class Damage {
       } else {
         this.repairAt?.delete(s.id);
       }
-      if (s.status === "working") {
+      if (st.has("working") && !st.has("done")) {
         const since = workingSince(s);
         if (since != null) {
           if (now - since < LIGHT_AFTER) next = Math.min(next, since + LIGHT_AFTER);
@@ -100,4 +107,58 @@ export class Damage {
     }
     return this.level;
   }
+}
+
+// ---------- 怪兽 ----------
+export const STATUS_TEXT = { idle: "睡觉中", working: "拆楼中", done: "拆完了", blocked: "等你" };
+const MODE = { working: "smash", done: "roar", blocked: "wave" };
+const BUBBLE = { swim: "zz", roar: "bang", wave: "question" };
+const KEY = "kaiju.monsters";
+
+// Agent 按出现顺序依次分配阵容里的怪兽，循环使用；存在 shared 里，各部件看到同一只
+export function assign(list) {
+  const old = shared(KEY) ?? { map: {}, n: 0 };
+  const map = {};
+  let n = old.n ?? 0;
+  let changed = false;
+  for (const a of list) {
+    if (old.map?.[a.address]) map[a.address] = old.map[a.address];
+    else {
+      map[a.address] = M.monsters[n % M.monsters.length].id;
+      n += 1;
+      changed = true;
+    }
+  }
+  if (Object.keys(old.map ?? {}).some((k) => !(k in map))) changed = true;
+  if (changed) setShared(KEY, { map, n });
+  return new Map(Object.entries(map));
+}
+
+export const monsterOf = (id) => M.monsters.find((m) => m.id === id) ?? M.monsters[0];
+
+// 每只怪兽在沙盘里的去处：mode（swim/smash/roar/wave）、脚底位置 spot、站位所属楼位、头顶气泡
+export function behaviors(list) {
+  const out = new Map();
+  const perSlot = new Map();
+  list.forEach((a, idx) => {
+    const slot = slotOf(a.space);
+    let mode = MODE[a.status] ?? "swim";
+    if (slot == null) mode = "swim";
+    let spot;
+    if (mode === "swim") {
+      // 海位按 Agent 在列表里的序号固定，别的怪兽上岸时不会跟着挪
+      const k = idx;
+      const p = M.sea[k % M.sea.length];
+      // 海位用完后错开一点再复用
+      spot = { x: p.x + Math.floor(k / M.sea.length) * 10, y: p.y, depth: p.depth };
+    } else {
+      const k = perSlot.get(slot) ?? 0;
+      perSlot.set(slot, k + 1);
+      const st = M.slots[slot].stand;
+      const p = st[Math.min(k, st.length - 1)];
+      spot = { x: p.x + Math.max(0, k - st.length + 1) * 14, y: p.y, depth: p.depth };
+    }
+    out.set(a.address, { mode, spot, slot: mode === "swim" ? null : slot, bubble: BUBBLE[mode] ?? null });
+  });
+  return out;
 }
