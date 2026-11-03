@@ -6,8 +6,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 NIGHT = False
-W, H = 320, 300
-OX, OY = 160, 96
+W, H = 400, 480
+OX, OY = 200, 272
 SCALE = 3
 
 def hexc(h):
@@ -314,57 +314,62 @@ def puff(cx, cy, scale=1.0, smoke=False):
     return s
 
 # ---------- 场景 ----------
-S, T = 140, 16
-wx0, wy0 = 30, 98         # 海区（前左角）
+S, T = 176, 16
+wx0, wy0 = 40, 126        # 海区（前左角）：x∈[wx0, S-40)，y ≥ wy0
+RX, RY = 80, 76           # 竖路 x∈[RX, RX+16)（只到海边），横路 y∈[RY, RY+16)
 PID = [0]                 # 底座顶面物体编号（不描边）
 
-# 8 个楼位：(x, y, w, d, h, 颜色, 外立面)；顺序即 space 顺序
+# 8 个楼位：(x, y, w, d, h, 颜色, 外立面)；顺序即 space 顺序。四个街区，楼间至少隔 8
 SLOTS = [
-    (8, 6, 22, 22, 78, "#6f8fc9", "grid"),
-    (84, 36, 22, 18, 88, "#e07a3c", "grid"),
-    (36, 32, 18, 20, 56, "#5fae6e", "grid"),
-    (114, 36, 20, 20, 58, "#ddd5c1", "grid"),
-    (36, 8, 18, 18, 44, "#d9573f", "grid"),
-    (84, 4, 26, 26, 122, "#a3acbd", "glass"),
-    (8, 80, 18, 12, 30, "#d8a548", "grid"),
-    (84, 82, 20, 12, 22, "#c87fb0", "grid"),
+    (8, 8, 24, 24, 120, "#6f8fc9", "grid"),
+    (104, 44, 24, 20, 136, "#e07a3c", "grid"),
+    (40, 42, 22, 22, 90, "#5fae6e", "grid"),
+    (144, 40, 22, 22, 100, "#ddd5c1", "grid"),
+    (46, 8, 20, 20, 72, "#d9573f", "grid"),
+    (104, 4, 28, 28, 190, "#a3acbd", "glass"),
+    (10, 100, 20, 14, 48, "#d8a548", "grid"),
+    (106, 100, 22, 14, 40, "#c87fb0", "grid"),
 ]
-# 每个楼位前方两个站位（世界坐标，地面）
-# 两个站位在屏幕上左右错开约 28 像素；怪兽总画在楼上层，后排楼的站位放在楼间空地
+# 每个楼位前方两个站位（世界坐标，地面）；屏幕上左右错开 ≥ 28 像素；怪兽总画在楼上层
 STANDS = [
-    [(16, 44), (4, 60)],
-    [(95, 60), (81, 74)],
-    [(45, 58), (31, 72)],
-    [(124, 62), (110, 76)],
-    [(70, 44), (82, 26)],
-    [(122, 26), (136, 12)],
-    [(17, 98), (3, 113)],
-    [(110, 88), (132, 80)],
+    [(26, 46), (12, 60)],
+    [(120, 74), (104, 86)],
+    [(54, 74), (38, 86)],
+    [(158, 72), (142, 84)],
+    [(72, 34), (80, 12)],
+    [(158, 4), (140, 30)],
+    [(24, 122), (4, 132)],
+    [(122, 122), (148, 110)],
 ]
-# 海里的泡澡位（世界坐标，水面 z=-4）
-SEA = [(52, 116), (76, 124), (94, 110), (40, 132)]
+# 怪兽出场 / 退场的海边入场点（世界坐标，水面 z=-4）
+ENTRY = (88, 150)
+# 天空里的云（屏幕坐标中心、大小）
+CLOUDS = [(70, 60, 1.3), (330, 40, 1.0), (360, 150, 0.8), (110, 170, 0.7)]
 
 def draw_plate():
     gnd = night(hexc("#d4cfc5"))
     side = night(hexc("#a39d92"))
 
     def ground(x, y):
-        if wx0 <= x < S - 34 and y >= wy0:
+        if wx0 <= x < S - 40 and y >= wy0:
             return None
-        on_road_x = 60 <= y < 76
-        on_road_y = 62 <= x < 78 and y < wy0
+        on_road_x = RY <= y < RY + 16
+        on_road_y = RX <= x < RX + 16 and y < wy0
         if on_road_x or on_road_y:
             c = night(hexc("#4b4f57"))
-            if on_road_x and 67.5 <= y < 68.5 and int(x) % 10 < 5 and not 60 <= x < 80:
+            if on_road_x and RY + 7.5 <= y < RY + 8.5 and int(x) % 10 < 5 and not RX - 2 <= x < RX + 18:
                 return night(hexc("#f1f1f1"))
-            if on_road_y and 69.5 <= x < 70.5 and int(y) % 10 < 5 and not 58 <= y < 78:
+            if on_road_y and RX + 7.5 <= x < RX + 8.5 and int(y) % 10 < 5 and not RY - 4 <= y < RY + 20:
                 return night(hexc("#f1f1f1"))
             # 斑马线
-            if on_road_x and 55 <= x < 60 and int(y) % 3 == 0:
+            if on_road_x and RX - 7 <= x < RX - 2 and int(y) % 3 == 0:
+                return night(hexc("#eeeeee"))
+            if on_road_x and RX + 18 <= x < RX + 23 and int(y) % 3 == 0:
                 return night(hexc("#eeeeee"))
             return c
         # 人行道边缘（贴路一圈浅色路沿）
-        near = (57 <= y < 60) or (76 <= y < 79) or (59 <= x < 62 and y < wy0) or (78 <= x < 81 and y < wy0)
+        near = (RY - 3 <= y < RY) or (RY + 16 <= y < RY + 19) or \
+               (RX - 3 <= x < RX and y < wy0) or (RX + 16 <= x < RX + 19 and y < wy0)
         if near:
             return shade(gnd, 0.12)
         # 地砖缝
@@ -385,7 +390,7 @@ def draw_plate():
             return shade(col, -0.32)
         return f
     left(0, wx0, S, -T, 0, slab_side(side), pid)
-    left(S - 34, S, S, -T, 0, slab_side(side), pid)
+    left(S - 40, S, S, -T, 0, slab_side(side), pid)
     right(S, 0, S, -T, 0, slab_side(shade(side, -0.12)), pid)
     top(0, 0, S, S, 0, ground, pid)
 
@@ -398,33 +403,52 @@ def draw_plate():
         if int(y) % 6 == 0 and rnd(int(x / 4), int(y)) < 0.35:
             return shade(water, 0.6)
         return water if int(y) % 12 < 6 else shade(water, 0.06)
-    top(wx0, wy0, S - 34, S, -4, wtop, wid)
+    top(wx0, wy0, S - 40, S, -4, wtop, wid)
     def wside(u, v):
         k = v / (T - 4)
         c = shade(water, -0.45 + 0.4 * k)
         if v > T - 6:
             return shade(water, 0.55) if int(u) % 4 else shade(water, 0.2)
         return c
-    left(wx0, S - 34, S, -T, -4, wside, wid)
+    left(wx0, S - 40, S, -T, -4, wside, wid)
     # 岸墙
-    left(wx0, S - 34, wy0, -4, 0, lambda u, v: shade(side, -0.1), new_obj())
+    left(wx0, S - 40, wy0, -4, 0, lambda u, v: shade(side, -0.1), new_obj())
     right(wx0, wy0, S, -4, 0, lambda u, v: shade(side, -0.25), new_obj())
-    right(S - 34, wy0, S, -4, 0, lambda u, v: shade(side, -0.1), new_obj())
+    right(S - 40, wy0, S, -4, 0, lambda u, v: shade(side, -0.1), new_obj())
 
     # 树、小车
-    for (tx, ty) in [(31, 56), (45, 56), (31, 80), (112, 80), (124, 80), (56, 30), (56, 48)]:
+    for (tx, ty) in [(36, 70), (70, 38), (70, 68), (138, 70), (170, 70), (36, 104), (140, 106), (166, 118), (100, 70)]:
         t = Sprite(9, 12)
         t.rect(4, 8, 5, 12, hexc("#6b4a33"))
         t.blob(4.5, 5, 4.2, 4.2, pal("#55b06a"))
         t.outline()
         t.place(tx, ty)
-    for (cx, cy, col) in [(20, 64, "#e8463b"), (40, 71, "#f2c14e"), (66, 30, "#4a8fe8"), (73, 44, "#ffffff"), (110, 64, "#3fb07a")]:
-        horiz = 60 <= cy < 76
+    for (cx, cy, col) in [(22, 79, "#e8463b"), (52, 86, "#f2c14e"), (83, 30, "#4a8fe8"), (90, 52, "#ffffff"),
+                          (146, 79, "#3fb07a"), (83, 104, "#e8463b")]:
+        horiz = RY <= cy < RY + 16
         w_, d_ = (6, 3) if horiz else (3, 6)
         c0 = night(hexc(col), -0.25)
         box(cx, cy, 0, w_, d_, 2, shade(c0, 0.2), c0, shade(c0, -0.25))
         box(cx + (1 if horiz else 0.5), cy + (0.5 if horiz else 1), 2, w_ - 2 if horiz else 2, d_ - 1 if horiz else d_ - 2, 1.5,
             hexc("#bfe3ff") if not NIGHT else hexc("#ffe39a"), hexc("#7fa6c4"), hexc("#6a8aa3"))
+
+def clouds():
+    # 天空里的像素云（RGBA 图层，屏幕坐标）
+    img = np.zeros((H, W, 4), dtype=np.uint8)
+    for (cx, cy, k) in CLOUDS:
+        sp = Sprite(int(46 * k) + 6, int(22 * k) + 6)
+        c = pal("#ffffff") if not NIGHT else pal("#5a6273")
+        for (x, y, r) in [(12, 14, 8), (24, 11, 10), (36, 14, 8), (19, 16, 7), (30, 17, 7)]:
+            sp.blob(x * k + 3, y * k + 3, r * k, r * k * 0.8, c)
+        sp.outline()
+        arr = np.clip(sp.c, 0, 255).astype(np.uint8)
+        # 云的描边改浅，避免太重
+        dark = (arr[:, :, 3] > 0) & (arr[:, :, :3].sum(axis=2) < (380 if not NIGHT else 150))
+        arr[dark, :3] = (np.array([200, 205, 214]) if not NIGHT else np.array([40, 45, 56]))
+        x0, y0 = int(cx - sp.w / 2), int(cy - sp.h / 2)
+        m = arr[:, :, 3] > 0
+        img[y0:y0 + sp.h, x0:x0 + sp.w][m] = arr[m]
+    return img
 
 def rubble(x0, y0, x1, y1, n, colors, seed, hmax=3):
     # 在 [x0,x1)×[y0,y1) 内撒 n 块小碎石
@@ -510,36 +534,21 @@ def stage_color():
     return "#0e1117" if NIGHT else "#f5f5f4"
 
 def main():
-    # 整幅 v4 样张：底座 + 8 楼（橙楼重损）+ 碎石 + 怪兽 + 烟尘
+    # 整幅样张：天空 + 底座 + 8 楼（橙楼重损）+ 可选怪兽（SPRITES="路径:x:y;..." 世界坐标）
     out_dir = sys.argv[1]
     mode = sys.argv[2] if len(sys.argv) > 2 else "day"
-    scale = 3
+    scale = 2
     reset(mode)
     draw_plate()
     for i in range(len(SLOTS)):
         draw_slot(i, 2 if i == 1 else 0)
-    for k in range(22):
-        rx, ry = 100 + (k * 7) % 30, 54 + (k * 11) % 24
-        c = night(hexc("#e07a3c") if k % 3 == 0 else hexc("#9a8f84"))
-        box(rx, ry, 0, 1.5 + k % 3, 1.5 + (k * 2) % 3, 1 + k % 3, shade(c, 0.2), c, shade(c, -0.3))
-    spr = os.environ.get("SPRITES")  # "路径:x:y;路径:x:y" 依次摆放
-    liz = os.environ.get("LIZARD_FRAME")
-    if spr:
-        for item in spr.split(";"):
-            path, sx_, sy_ = item.rsplit(":", 2)
-            sprite_png(path).place(float(sx_), float(sy_))
-    elif liz:
-        sprite_png(liz).place(118, 72)
-    else:
-        lizard().place(116, 72)
-        ape().place(30, 66, flip=False)
-    puff(0, 0, 1.0).place(100, 44, 66)
-    puff(0, 0, 0.7).place(108, 62, 30)
-    puff(0, 0, 0.6).place(36, 74, 8)
-    img = Image.fromarray(layer(), "RGBA")
+    for item in filter(None, os.environ.get("SPRITES", "").split(";")):
+        path, sx_, sy_ = item.rsplit(":", 2)
+        sprite_png(path).place(float(sx_), float(sy_))
     stage = Image.new("RGBA", (W, H), tuple(hexc(stage_color()).astype(int)))
+    stage.alpha_composite(Image.fromarray(clouds(), "RGBA"))
     stage.alpha_composite(shadow())
-    stage.alpha_composite(img)
+    stage.alpha_composite(Image.fromarray(layer(), "RGBA"))
     stage.resize((W * scale, H * scale), Image.NEAREST).save(f"{out_dir}/render-{mode}.png")
     print("ok", mode)
 

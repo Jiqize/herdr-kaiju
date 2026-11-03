@@ -26,7 +26,7 @@
       "id": "sidebar",
       "type": "column",
       "size": {
-        "px": 340
+        "px": 400
       },
       "resizable": false,
       "background": "chrome",
@@ -35,7 +35,7 @@
           "id": "city",
           "type": "block",
           "size": {
-            "px": 312
+            "px": 492
           },
           "window_drag": true,
           "content": {

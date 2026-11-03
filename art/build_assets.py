@@ -34,7 +34,8 @@ def build_city(mode, manifest):
     R.reset(mode)
     R.draw_plate()
     snap = R.snapshot()
-    plate = R.shadow()
+    plate = Image.fromarray(R.clouds(), "RGBA")
+    plate.alpha_composite(R.shadow())
     plate.alpha_composite(Image.fromarray(R.layer(), "RGBA"))
     save2x(plate, f"{OUT}/{mode}/plate.png")
     layers = {"plate": np.asarray(plate)}
@@ -65,9 +66,9 @@ def build_city(mode, manifest):
                 "depth": x + w / 2 + y + d / 2,
                 "layers": [f"slot{i}-{k}.png" for k in range(4)], "empty": f"slot{i}-empty.png",
             })
-        for (sx, sy) in R.SEA:
-            px, py = R.P(sx, sy, -4)
-            manifest["sea"].append({"x": round(px), "y": round(py), "depth": sx + sy})
+        ex, ey = R.ENTRY
+        px, py = R.P(ex, ey, -4)
+        manifest["entry"] = {"x": round(px), "y": round(py), "depth": ex + ey}
     return layers
 
 # ---------- 怪兽 ----------
@@ -104,22 +105,6 @@ def in_box(arr, bw, bh):
     box[bh - fh:, left:left + fw] = arr
     return box
 
-def swim_frame(idle, mode):
-    # 只露头和背鳍：保留 idle 上 55%，底部加 2 行水波
-    fh, fw = idle.shape[:2]
-    keep = idle[:round(fh * 0.55)]
-    R.reset(mode)
-    water = R.night(R.hexc("#3c9fe6"), -0.3)
-    foam = R.shade(water, 0.85)
-    out = np.zeros((keep.shape[0] + 2, fw + 4, 4), dtype=np.uint8)
-    out[:keep.shape[0], 2:2 + fw] = keep
-    cols = np.where(keep[-1, :, 3] > 0)[0] + 2
-    x0, x1 = (int(cols.min()) - 2, int(cols.max()) + 3) if len(cols) else (0, fw + 4)
-    for xx in range(x0, x1):
-        out[-2, xx] = foam if xx % 3 else water
-        out[-1, xx] = water if xx % 4 else foam
-    return out
-
 def head_crop(arr, size):
     # 头部：取帧的上 55%，按头部列范围居中裁进 size×size
     fh = arr.shape[0]
@@ -151,14 +136,14 @@ def build_monsters(manifest):
                 save2x(in_box(conv(fr[k]), bw, bh), f"{OUT}/{mode}/monsters/{mid}/{k}.png")
                 # 头像 48×48 原尺寸保存：按 24 逻辑像素显示时 1 美术像素 = 1 设备像素
                 save1x(Image.fromarray(head_crop(conv(fr[k]), 48), "RGBA"), f"{OUT}/{mode}/monsters/{mid}/head-{k}.png")
+                # 名册大头像 48×48 美术像素，2 倍导出，按 48 逻辑像素显示
+                save2x(head_crop(conv(fr[k]), 48), f"{OUT}/{mode}/monsters/{mid}/avatar-{k}.png")
             # 快讯大头像：咆哮帧头部 32×32，2 倍导出，按 32 逻辑像素显示
             save2x(head_crop(conv(fr["roar"]), 32), f"{OUT}/{mode}/monsters/{mid}/face-roar.png")
-            swim = swim_frame(conv(fr["idle"]), mode)
-            save2x(in_box(swim, bw, bh), f"{OUT}/{mode}/monsters/{mid}/swim.png")
             if mode == "day":
                 sprites[mid] = {k: in_box(fr[k], bw, bh) for k in FRAMES}
-                sprites[mid]["swim"] = in_box(swim, bw, bh)
-        for k in FRAMES + ("swim",):
+        entry["avatars"] = {k: f"monsters/{mid}/avatar-{k}.png" for k in FRAMES}
+        for k in FRAMES:
             entry["frames"][k] = f"monsters/{mid}/{k}.png"
         entry["frames"]["head"] = f"monsters/{mid}/head-idle.png"
         for k in FRAMES:
@@ -267,7 +252,7 @@ def verify(manifest):
     for s in manifest["slots"]:
         names += s["layers"] + [s["empty"]]
     for m in manifest["monsters"]:
-        names += list(m["frames"].values()) + list(m["heads"].values()) + [m["face"]]
+        names += list(m["frames"].values()) + list(m["heads"].values()) + list(m["avatars"].values()) + [m["face"]]
     names += list(manifest["fx"].values())
     cw, ch = manifest["canvas"]["w"] * 2, manifest["canvas"]["h"] * 2
     for mode in MODES:
@@ -285,11 +270,13 @@ def check_image(manifest, layers, sprites):
     slots = manifest["slots"]
     sp = manifest["sprite"]
     ids = [m["id"] for m in manifest["monsters"]]
-    actors = [  # (depth, x, y, 图像)
+    actors = [  # (站位, 图像)
         (slots[1]["stand"][0], sprites[ids[0]]["smash"]),
+        (slots[1]["stand"][1], sprites[ids[1 % len(ids)]]["wave"]),
         (slots[2]["stand"][0], sprites[ids[1 % len(ids)]]["roar"]),
         (slots[6]["stand"][0], sprites[ids[2 % len(ids)]]["wave"]),
-        (manifest["sea"][0], sprites[ids[0]]["swim"]),
+        (slots[5]["stand"][0], sprites[ids[2 % len(ids)]]["smash"]),
+        (manifest["entry"], sprites[ids[0]]["walk"]),
     ]
     canvas = Image.new("RGBA", (R.W, R.H), (245, 245, 244, 255))
     canvas.alpha_composite(Image.fromarray(layers["plate"]))
@@ -298,7 +285,9 @@ def check_image(manifest, layers, sprites):
         layer = Image.new("RGBA", (R.W, R.H), (0, 0, 0, 0))
         layer.alpha_composite(Image.fromarray(img), (pos["x"] - sp["ax"], pos["y"] - sp["ay"]))
         items.append((pos["depth"], layer))
-    for _, img in sorted(items, key=lambda t: t[0]):
+    # 楼按 depth，怪兽一律在楼之上（与 city.js 一致）
+    items = [(0, d, img) for d, img in items[:len(slots)]] + [(1, d, img) for d, img in items[len(slots):]]
+    for _, _, img in sorted(items, key=lambda t: (t[0], t[1])):
         canvas.alpha_composite(img)
     strip = Image.new("RGBA", (R.W, R.H), (245, 245, 244, 255))
     strip.alpha_composite(Image.fromarray(layers["plate"]))
@@ -309,12 +298,12 @@ def check_image(manifest, layers, sprites):
         dmg_row.paste(cell, (k * R.W, 0))
     os.makedirs(SAMPLES, exist_ok=True)
     canvas.resize((R.W * 3, R.H * 3), Image.NEAREST).save(f"{SAMPLES}/assets-check.png")
-    dmg_row.crop((0, 0, R.W * 5, 200)).resize((R.W * 5 * 2, 400), Image.NEAREST).save(f"{SAMPLES}/assets-damage.png")
+    dmg_row.crop((0, 150, R.W * 5, R.H)).save(f"{SAMPLES}/assets-damage.png")
 
 def main():
     if os.path.exists(OUT):
         shutil.rmtree(OUT)
-    manifest = {"canvas": {"w": R.W, "h": R.H}, "slots": [], "sea": [], "monsters": []}
+    manifest = {"canvas": {"w": R.W, "h": R.H}, "slots": [], "monsters": []}
     day_layers = None
     for mode in MODES:
         layers = build_city(mode, manifest)

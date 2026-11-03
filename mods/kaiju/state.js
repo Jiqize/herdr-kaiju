@@ -112,7 +112,7 @@ export class Damage {
 // ---------- 怪兽 ----------
 export const STATUS_TEXT = { idle: "睡觉中", working: "拆楼中", done: "拆完了", blocked: "等你" };
 const MODE = { working: "smash", done: "roar", blocked: "wave" };
-const BUBBLE = { swim: "zz", roar: "bang", wave: "question" };
+const BUBBLE = { roar: "bang", wave: "question" };
 const KEY = "kaiju.monsters";
 
 // Agent 按出现顺序依次分配阵容里的怪兽，循环使用；存在 shared 里，各部件看到同一只
@@ -136,29 +136,24 @@ export function assign(list) {
 
 export const monsterOf = (id) => M.monsters.find((m) => m.id === id) ?? M.monsters[0];
 
-// 每只怪兽在沙盘里的去处：mode（swim/smash/roar/wave）、脚底位置 spot、站位所属楼位、头顶气泡
+// 每只出场怪兽在沙盘里的去处：mode（smash/roar/wave）、脚底位置 spot、所属楼位 slot、头顶气泡
+// idle 或所属 space 不在沙盘上的：slot = null，不出场
 export function behaviors(list) {
   const out = new Map();
   const perSlot = new Map();
-  list.forEach((a, idx) => {
+  for (const a of list) {
     const slot = slotOf(a.space);
-    let mode = MODE[a.status] ?? "swim";
-    if (slot == null) mode = "swim";
-    let spot;
-    if (mode === "swim") {
-      // 海位按 Agent 在列表里的序号固定，别的怪兽上岸时不会跟着挪
-      const k = idx;
-      const p = M.sea[k % M.sea.length];
-      // 海位用完后错开一点再复用
-      spot = { x: p.x + Math.floor(k / M.sea.length) * 10, y: p.y, depth: p.depth };
-    } else {
-      const k = perSlot.get(slot) ?? 0;
-      perSlot.set(slot, k + 1);
-      const st = M.slots[slot].stand;
-      const p = st[Math.min(k, st.length - 1)];
-      spot = { x: p.x + Math.max(0, k - st.length + 1) * 14, y: p.y, depth: p.depth };
+    const mode = MODE[a.status] ?? null;
+    if (mode == null || slot == null) {
+      out.set(a.address, { mode: "idle", spot: null, slot: null, bubble: null });
+      continue;
     }
-    out.set(a.address, { mode, spot, slot: mode === "swim" ? null : slot, bubble: BUBBLE[mode] ?? null });
-  });
+    const k = perSlot.get(slot) ?? 0;
+    perSlot.set(slot, k + 1);
+    const st = M.slots[slot].stand;
+    const p = st[Math.min(k, st.length - 1)];
+    const spot = { x: p.x + Math.max(0, k - st.length + 1) * 14, y: p.y, depth: p.depth };
+    out.set(a.address, { mode, spot, slot, bubble: BUBBLE[mode] ?? null });
+  }
   return out;
 }

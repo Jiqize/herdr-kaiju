@@ -4,6 +4,7 @@ import { div, image } from "gpui-kit";
 import { spaces, agents, setAgentOrder, run, props } from "herdr";
 import M from "./manifest.js";
 import { asset, assign, behaviors, monsterOf, STATUS_TEXT } from "./state.js";
+// 怪兽画在楼之上；出场的只有 working / done / blocked
 
 const W = M.canvas.w;
 const H = M.canvas.h;
@@ -37,23 +38,51 @@ function rising(view, list, cx) {
   return c.rising;
 }
 
-// 位置变了的怪兽在移动途中显示走路帧，到达后（一次 timer.after）换回目标帧
-function walking(view, list, beh, cx) {
-  const w = (view.walk ??= new Map());
+// 怪兽出场 / 移动 / 退场：
+//   新出场的先画在海边入场点，40ms 后改到站位，transition 走过去（途中走路帧）
+//   位置变了同样走过去；不再出场（回到 idle 或消失）的走回入场点，到达后移除
+//   全部用一次性 timer.after 唤醒，不用 every
+function moves(view, active, beh, cx) {
+  const st = (view.walk ??= { map: new Map(), init: false });
   const now = Date.now();
+  const entry = M.entry;
   let wake = 0;
-  for (const a of list) {
+  let enter = false;
+  const out = [];
+  const live = new Set();
+  for (const a of active) {
     const b = beh.get(a.address);
-    const last = w.get(a.address);
-    if (last && (last.x !== b.spot.x || last.y !== b.spot.y)) {
-      last.until = now + WALK;
-      wake = WALK + 20;
+    live.add(a.address);
+    let e = st.map.get(a.address);
+    if (!e || e.leaving) {
+      // 第一次渲染时已在干活的直接站好，不演入场
+      e = { x: b.spot.x, y: b.spot.y, until: 0, enter: st.init, leaving: false };
+      if (e.enter) enter = true;
+      st.map.set(a.address, e);
+    } else if (e.x !== b.spot.x || e.y !== b.spot.y) {
+      e.x = b.spot.x; e.y = b.spot.y; e.until = now + WALK;
+      wake = Math.max(wake, WALK + 20);
     }
-    w.set(a.address, { x: b.spot.x, y: b.spot.y, until: last?.until ?? 0 });
+    if (e.needWake) { e.needWake = false; wake = Math.max(wake, WALK + 20); }
+    e.agent = a;
+    const pos = e.enter ? entry : b.spot;
+    out.push({ a, b, pos, walking: e.enter || e.until > now });
   }
-  for (const k of [...w.keys()]) if (!beh.has(k)) w.delete(k);
+  for (const [addr, e] of [...st.map]) {
+    if (live.has(addr)) continue;
+    if (!e.leaving) { e.leaving = true; e.until = now + WALK; wake = Math.max(wake, WALK + 20); }
+    if (e.until <= now) { st.map.delete(addr); continue; }
+    out.push({ a: e.agent, b: { mode: "leave", spot: entry, slot: null, bubble: null }, pos: entry, walking: true });
+  }
+  if (enter) {
+    cx.timer.after(40, (cx) => {
+      for (const e of st.map.values()) if (e.enter) { e.enter = false; e.until = Date.now() + WALK; e.needWake = true; }
+      cx.notify();
+    });
+  }
   if (wake) cx.timer.after(wake, (cx) => cx.notify());
-  return (addr) => (w.get(addr)?.until ?? 0) > now;
+  st.init = true;
+  return out;
 }
 
 // props().demo.agents：截图检查用的假 Agent，[{address, space: 序号, status, name}]
@@ -67,23 +96,20 @@ function agentList() {
   }));
 }
 
-function monster(t, a, b, mid, isWalking) {
+function monster(t, it, mid) {
+  const { a, b, pos, walking } = it;
   const m = monsterOf(mid);
-  const frame = isWalking ? "walk" : b.mode === "swim" ? "swim" : b.mode;
+  const frame = walking ? "walk" : b.mode;
   let body = div().id(`mon-body-${a.address}`).absolute().left(0).top(0).w(SP.w).h(SP.h)
     .child(image(asset(t, m.frames[frame])).w(SP.w).h(SP.h));
-  if (!isWalking && b.mode === "smash") body = body.loop("left", { from: -1, to: 1, period: 180 });
-  if (!isWalking && b.mode === "swim") body = body.loop("top", { from: 0, to: 2, period: 1600 });
-  const el = div().id(`mon-${a.address}`).absolute().left(b.spot.x - SP.ax).top(b.spot.y - SP.ay).w(SP.w).h(SP.h)
+  if (!walking && b.mode === "smash") body = body.loop("left", { from: -1, to: 1, period: 180 });
+  const el = div().id(`mon-${a.address}`).absolute().left(pos.x - SP.ax).top(pos.y - SP.ay).w(SP.w).h(SP.h)
     .transition("left", { duration: WALK, easing: "ease-in-out" })
     .transition("top", { duration: WALK, easing: "ease-in-out" })
     .child(body);
-  if (b.bubble && !isWalking) {
-    const [bw, bh] = M.fxSize[b.bubble];
-    const top = (b.mode === "swim" ? SP.h - Math.round((SP.h - m.top) * 0.55) : m.top) - bh;
-    let bub = div().absolute().left(SP.ax + 14).top(top - 2).child(fx(t, b.bubble));
-    if (b.mode === "swim") bub = bub.id(`zz-${a.address}`).loop("opacity", { from: 0.35, to: 1, period: 1600 });
-    el.child(bub);
+  if (b.bubble && !walking) {
+    const [, bh] = M.fxSize[b.bubble];
+    el.child(div().absolute().left(SP.ax + 14).top(m.top - bh - 2).child(fx(t, b.bubble)));
   }
   return el;
 }
@@ -98,14 +124,14 @@ export function city(view, t, cx) {
 
   if (!demo?.agents) setAgentOrder(ags.map((a) => a.address));
   const mids = assign(ags);
+  // 只有 working / done / blocked 且所属 space 在沙盘上的怪兽出场；idle 待在名册卡片里
   const beh = behaviors(ags);
-  const isWalking = walking(view, ags, beh, cx);
+  const shown = moves(view, ags.filter((a) => beh.get(a.address).slot != null), beh, cx);
   // 每个楼位前的怪兽状态：有拆楼的 → 楼震动 + 烟尘；有等你的 → 楼顶警报灯
   const smashing = new Set();
   const waiting = new Set();
-  for (const a of ags) {
-    const b = beh.get(a.address);
-    if (b.slot == null || isWalking(a.address)) continue;
+  for (const { b, walking } of shown) {
+    if (b.slot == null || walking) continue;
     if (b.mode === "smash") smashing.add(b.slot);
     if (b.mode === "wave") waiting.add(b.slot);
   }
@@ -113,14 +139,13 @@ export function city(view, t, cx) {
   // 楼按 depth 从后往前叠；怪兽一律画在所有楼之上（后排楼前的怪兽也不被前排楼挡住），彼此按 depth 排
   const items = [];
   for (const s of M.slots) items.push({ depth: s.depth, order: 0, slot: s });
-  for (const a of ags) items.push({ depth: beh.get(a.address).spot.depth, order: 1, agent: a });
+  for (const it of shown) items.push({ depth: it.pos.depth, order: 1, mon: it });
   items.sort((x, y) => x.order - y.order || x.depth - y.depth);
 
   const stage = div().relative().w(W).h(H).child(layer(t, "plate.png"));
   for (const it of items) {
-    if (it.agent) {
-      const a = it.agent;
-      stage.child(monster(t, a, beh.get(a.address), mids.get(a.address), isWalking(a.address)));
+    if (it.mon) {
+      stage.child(monster(t, it.mon, mids.get(it.mon.a.address)));
       continue;
     }
     const s = it.slot;
@@ -172,10 +197,10 @@ export function city(view, t, cx) {
       .on_mouse_down("left", stop)
       .on_click(() => run("space.select", { id: sp.id })));
   }
-  for (const a of ags) {
-    const b = beh.get(a.address);
+  for (const { a, b, walking } of shown) {
+    if (walking) continue;
     const m = monsterOf(mids.get(a.address));
-    const h = b.mode === "swim" ? 26 : SP.h - m.top;
+    const h = SP.h - m.top;
     stage.child(div().id(`mhit-${a.address}`).absolute().left(b.spot.x - 18).top(b.spot.y - h).w(36).h(h)
       .cursor_pointer().tooltip(`${m.name} · ${a.program?.name ?? a.app ?? "Agent"} · ${STATUS_TEXT[a.status] ?? ""}`)
       .on_mouse_down("left", stop)
