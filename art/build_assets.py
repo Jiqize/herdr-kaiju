@@ -314,6 +314,9 @@ def main():
     sprites = build_monsters(manifest)
     with open(f"{OUT}/manifest.json", "w") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=1)
+    # mod 里同步 import 用的同一份数据
+    with open(os.path.join(ROOT, "mods", "kaiju", "manifest.js"), "w") as f:
+        f.write("// 由 art/build_assets.py 生成，勿手改\nexport default " + json.dumps(manifest, ensure_ascii=False) + ";\n")
     n = verify(manifest)
     check_image(manifest, day_layers, sprites)
     print(f"ok: {n} 张素材，{len(manifest['slots'])} 楼位，{len(manifest['monsters'])} 只怪兽 → {OUT}")
