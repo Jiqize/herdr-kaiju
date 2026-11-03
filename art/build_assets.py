@@ -58,6 +58,8 @@ def build_city(mode, manifest):
             manifest["slots"].append({
                 "i": i, "color": color,
                 "roof": {"x": round(cx), "y": y0},
+                # 各损坏级别的实际楼顶 y（箭头、警报灯跟着楼高走）
+                "roofs": [bbox(layers[(i, k)])[1] for k in range(4)],
                 "stand": stands,
                 "hit": {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0},
                 "depth": x + w / 2 + y + d / 2,
@@ -244,12 +246,20 @@ def fx_bitmap(art, colors, mode):
     return out
 
 def build_fx(mode, manifest):
+    sizes = {}
     for name, (art, colors) in FX.items():
-        save2x(fx_bitmap(art, colors, mode), f"{OUT}/{mode}/fx/{name}.png")
+        arr = fx_bitmap(art, colors, mode)
+        save2x(arr, f"{OUT}/{mode}/fx/{name}.png")
+        sizes[name] = [arr.shape[1], arr.shape[0]]
     R.reset(mode)
-    save2x(R.puff(0, 0, 0.6).c.astype(np.uint8), f"{OUT}/{mode}/fx/dust.png")
+    dust = R.puff(0, 0, 0.6).c.astype(np.uint8)
+    dust = dust[:dust.shape[0] // 2 * 2, :dust.shape[1] // 2 * 2]
+    save2x(dust, f"{OUT}/{mode}/fx/dust.png")
+    sizes["dust"] = [dust.shape[1], dust.shape[0]]
     if mode == "day":
-        manifest["fx"] = {k: f"fx/{k}.png" for k in list(FX) + ["dust"]}
+        manifest["fx"] = {k: f"fx/{k}.png" for k in sizes}
+        # 1 倍逻辑尺寸 [宽, 高]
+        manifest["fxSize"] = sizes
 
 # ---------- 检查 ----------
 def verify(manifest):
