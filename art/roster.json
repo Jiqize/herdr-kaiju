@@ -1,5 +1,17 @@
 [
-  { "id": "lizard", "name": "巨蜥", "sheet": "art/ai/codex-lizard/lizard-sheet.png" },
-  { "id": "ape", "name": "巨猿", "sheet": "art/ai/codex-ape/ape-sheet.png" },
-  { "id": "mech", "name": "机甲", "sheet": "art/ai/codex-mech/mech-sheet.png" }
+  {
+    "id": "lizard",
+    "name": "巨蜥",
+    "sheet": "art/ai/codex-lizard/lizard-sheet.png"
+  },
+  {
+    "id": "ape",
+    "name": "巨猿",
+    "sheet": "art/ai/codex-ape/ape-sheet.png"
+  },
+  {
+    "id": "crab",
+    "name": "巨蟹",
+    "sheet": "art/ai/cand-crab/crab-sheet.png"
+  }
 ]

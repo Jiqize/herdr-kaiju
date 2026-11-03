@@ -345,26 +345,26 @@
    "face": "monsters/ape/face-roar.png"
   },
   {
-   "id": "mech",
-   "name": "机甲",
+   "id": "crab",
+   "name": "巨蟹",
    "frames": {
-    "idle": "monsters/mech/idle.png",
-    "walk": "monsters/mech/walk.png",
-    "smash": "monsters/mech/smash.png",
-    "roar": "monsters/mech/roar.png",
-    "wave": "monsters/mech/wave.png",
-    "swim": "monsters/mech/swim.png",
-    "head": "monsters/mech/head-idle.png"
+    "idle": "monsters/crab/idle.png",
+    "walk": "monsters/crab/walk.png",
+    "smash": "monsters/crab/smash.png",
+    "roar": "monsters/crab/roar.png",
+    "wave": "monsters/crab/wave.png",
+    "swim": "monsters/crab/swim.png",
+    "head": "monsters/crab/head-idle.png"
    },
    "heads": {
-    "idle": "monsters/mech/head-idle.png",
-    "walk": "monsters/mech/head-walk.png",
-    "smash": "monsters/mech/head-smash.png",
-    "roar": "monsters/mech/head-roar.png",
-    "wave": "monsters/mech/head-wave.png"
+    "idle": "monsters/crab/head-idle.png",
+    "walk": "monsters/crab/head-walk.png",
+    "smash": "monsters/crab/head-smash.png",
+    "roar": "monsters/crab/head-roar.png",
+    "wave": "monsters/crab/head-wave.png"
    },
-   "top": 1,
-   "face": "monsters/mech/face-roar.png"
+   "top": 4,
+   "face": "monsters/crab/face-roar.png"
   }
  ],
  "fx": {
@@ -377,9 +377,9 @@
   "dust": "fx/dust.png"
  },
  "sprite": {
-  "w": 60,
+  "w": 66,
   "h": 62,
-  "ax": 30,
+  "ax": 33,
   "ay": 62
  }
 }
