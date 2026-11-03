@@ -16,10 +16,10 @@ MODES = ("day", "night")
 FRAMES = ("idle", "walk", "smash", "roar", "wave")   # 与 AI 动作表从左到右的顺序一致
 SPRITE_H = 60
 
-def save2x(arr_or_img, path):
+def save2x(arr_or_img, path, k=2):
     im = arr_or_img if isinstance(arr_or_img, Image.Image) else Image.fromarray(arr_or_img, "RGBA")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    im.resize((im.width * 2, im.height * 2), Image.NEAREST).save(path)
+    im.resize((im.width * k, im.height * k), Image.NEAREST).save(path)
 
 def save1x(img, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -136,8 +136,8 @@ def build_monsters(manifest):
                 save2x(in_box(conv(fr[k]), bw, bh), f"{OUT}/{mode}/monsters/{mid}/{k}.png")
                 # 头像 48×48 原尺寸保存：按 24 逻辑像素显示时 1 美术像素 = 1 设备像素
                 save1x(Image.fromarray(head_crop(conv(fr[k]), 48), "RGBA"), f"{OUT}/{mode}/monsters/{mid}/head-{k}.png")
-                # 名册大头像 48×48 美术像素，2 倍导出，按 48 逻辑像素显示
-                save2x(head_crop(conv(fr[k]), 48), f"{OUT}/{mode}/monsters/{mid}/avatar-{k}.png")
+                # 名册大头像：和快讯同样 32×32 紧裁（脸撑满），3 倍导出 96px，按 48 逻辑像素显示
+                save2x(head_crop(conv(fr[k]), 32), f"{OUT}/{mode}/monsters/{mid}/avatar-{k}.png", 3)
             # 快讯大头像：咆哮帧头部 32×32，2 倍导出，按 32 逻辑像素显示
             save2x(head_crop(conv(fr["roar"]), 32), f"{OUT}/{mode}/monsters/{mid}/face-roar.png")
             if mode == "day":

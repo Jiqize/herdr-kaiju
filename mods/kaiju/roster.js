@@ -126,8 +126,9 @@ function card(t, a, mid, tab, now, dmg) {
   let avatar = image(asset(t, m.avatars[face])).w(48).h(48);
   // 拆楼中：头像轻轻抖（原生 loop）
   if (a.status === "working") avatar = div().id(`ava-${a.address}`).relative().loop("left", { from: -1, to: 1, period: 220 }).child(avatar);
-  const portrait = v_flex().flex_none().w(54)
-    .child(div().h(50).flex().items_center().justify_center().bg(`${color}30`).border(2).border_color(color).overflow_hidden().child(avatar))
+  // 头像框 52 = 2px 边框 + 48 头像，头像正好铺满
+  const portrait = v_flex().flex_none().w(52)
+    .child(div().size(52).flex().items_center().justify_center().bg(`${color}30`).border(2).border_color(color).overflow_hidden().child(avatar))
     .child(div().h(14).flex().items_center().justify_center().bg(color).text_size(12).text_color("#ffffff").child(m.name));
 
   // 切角：四个角盖一个舞台色小方块
