@@ -29,6 +29,86 @@ def bbox(arr):
     ys, xs = np.where(arr[:, :, 3] > 0)
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
+# ---------- 怪兽站位 ----------
+# 每栋楼自动挑 2 个站位，怪兽和楼按真实前后关系叠放（挡在前面的楼会遮住怪兽一部分，怪兽脚踏实地）
+#   挑选：离自家楼近、少被前面的楼遮挡（头要露出来）、少挡住自家楼、站在楼前方，彼此拉开距离
+#   每个站位给一个排序深度：在所有「挡住它的楼」之前、所有「被它挡住的楼」之后
+MON_W, MON_H = 36, 56     # 怪兽身体在画面上的大致范围（脚底中点向上）
+
+def slot_depth(k):
+    x, y, w, d = R.SLOTS[k][:4]
+    return x + w / 2 + y + d / 2
+
+def pick_stands(layers):
+    S = R.S
+    foot = [(x, y, w, d) for (x, y, w, d, *_ ) in R.SLOTS]
+
+    def inside(px, py, m=3):
+        return any(x - m <= px < x + w + m and y - m <= py < y + d + m for (x, y, w, d) in foot)
+
+    def front_of(sx, sy, k):
+        # 楼 k 挡在点前面：点在楼远角的后方
+        x, y, w, d = foot[k]
+        return sx < x + w and sy < y + d
+
+    def cover(sx, sy, ks):
+        px, py = R.P(sx, sy, 0)
+        x0, x1 = max(0, int(px - MON_W / 2)), int(px + MON_W / 2)
+        y0, y1 = max(0, int(py - MON_H)), int(py)
+        return sum(int((layers[(k, 0)][y0:y1, x0:x1, 3] > 0).sum()) for k in ks)
+
+    def dist(sx, sy, k):
+        x, y, w, d = foot[k]
+        return max(x - sx, 0, sx - (x + w)) + max(y - sy, 0, sy - (y + d))
+
+    chosen = []
+    out = [None] * len(foot)
+    # 后排楼先挑（可选位置少），前排楼后挑
+    for k in sorted(range(len(foot)), key=slot_depth):
+        x, y, w, d = foot[k]
+        mine = []
+        for reach, tol in ((16, 300), (24, 500), (36, 700), (60, 1000)):
+            cands = []
+            for sx in range(x - reach, x + w + reach + 1, 2):
+                for sy in range(y - reach, y + d + reach + 1, 2):
+                    if not (4 <= sx <= S - 4 and 4 <= sy <= S - 4) or inside(sx, sy):
+                        continue
+                    if R.wx0 <= sx < S - 40 and sy >= R.wy0 - 4:      # 海
+                        continue
+                    dd = dist(sx, sy, k)
+                    if dd > reach:
+                        continue
+                    hid = cover(sx, sy, [q for q in range(len(foot)) if front_of(sx, sy, q)])
+                    if hid > tol:
+                        continue
+                    own = 0 if front_of(sx, sy, k) else cover(sx, sy, [k])
+                    px, py = R.P(sx, sy, 0)
+                    score = hid / 25 + own / 40 + dd - 0.1 * (sx + sy - (x + y))
+                    cands.append((score, round(px), round(py), sx, sy))
+            cands.sort()
+            mine = []
+            for _, px, py, sx, sy in cands:
+                # 同一栋楼的两个站位间隔 ≥ 30，和别的楼的站位间隔 ≥ 24
+                if all(abs(px - qx) + abs(py - qy) >= 30 for qx, qy, *_ in mine) and \
+                   all(abs(px - qx) + abs(py - qy) >= 24 for qx, qy, *_ in chosen):
+                    mine.append((px, py, sx, sy))
+                if len(mine) == 2:
+                    break
+            if len(mine) == 2:
+                break
+        assert len(mine) == 2, f"楼位 {k} 找不到 2 个站位"
+        chosen += mine
+        res = []
+        for px, py, sx, sy in mine:
+            ahead = [slot_depth(q) for q in range(len(foot)) if front_of(sx, sy, q)]
+            behind = [slot_depth(q) for q in range(len(foot)) if not front_of(sx, sy, q)]
+            lo = max(behind, default=-1e9)
+            hi = min(ahead, default=1e9)
+            dep = (lo + hi) / 2 if lo < hi and hi < 1e9 and lo > -1e9 else (lo + 0.5 if hi >= 1e9 else hi - 0.5)
+            res.append((px, py, round(dep, 2)))
+        out[k] = res
+    return out
+
 # ---------- 城市图层 ----------
 def build_city(mode, manifest):
     R.reset(mode)
@@ -49,13 +129,11 @@ def build_city(mode, manifest):
             save2x(arr, f"{OUT}/{mode}/{name}")
             layers[(i, dmg)] = arr
     if mode == "day":
+        picked = pick_stands(layers)
         for i, (x, y, w, d, h, color, kind) in enumerate(R.SLOTS):
             x0, y0, x1, y1 = bbox(layers[(i, 0)])
             cx, _ = R.P(x + w / 2, y + d / 2, h)
-            stands = []
-            for (sx, sy) in R.STANDS[i]:
-                px, py = R.P(sx, sy, 0)
-                stands.append({"x": round(px), "y": round(py), "depth": sx + sy})
+            stands = [{"x": px, "y": py, "depth": dep} for (px, py, dep) in picked[i]]
             manifest["slots"].append({
                 "i": i, "color": color,
                 "roof": {"x": round(cx), "y": y0},

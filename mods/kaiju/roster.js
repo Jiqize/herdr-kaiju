@@ -261,6 +261,31 @@ function card(t, a, mid, tab, now, dmg, stat, no) {
       .child(body.hover((st) => st.border_color(t.input))));
 }
 
+// 头像模式的小方块：白边照片里一个 48 头像，边框是状态色；细节在悬停提示里
+function tile(t, a, mid, what) {
+  const P = paperOf(t);
+  const m = monsterOf(mid);
+  const color = slotColor(slotOf(a.space));
+  const face = FACE[a.status] ?? "idle";
+  const edge = a.focused ? t.input : BADGE[a.status] ?? P.line;
+  const shadow = isNight(t) ? "#00000099" : "#2b262033";
+  let avatar = image(asset(t, m.avatars[face])).w(48).h(48);
+  if (a.status === "working") avatar = div().id(`tava-${a.address}`).relative().loop("left", { from: -1, to: 1, period: 220 }).child(avatar);
+  return div().id(`tile-${a.address}`).relative().flex_none().pr(2).pb(2).cursor_pointer()
+    .tooltip(`${m.name} · ${progName(a)} · ${STATUS_TEXT[a.status] ?? "睡觉中"}${what ? ` · ${what}` : ""}`)
+    .on_mouse_down("left", stop)
+    .on_click(() => run("pane.focus", { pane: a.pane }))
+    .child(div().absolute().left(2).top(2).right(0).bottom(0).bg(shadow))
+    // 56 = 2px 状态色边框 + 2px 白边 + 48 头像
+    .child(div().size(56).bg("#ffffff").border(2).border_color(edge).p(2)
+      .hover((st) => st.border_color(t.input))
+      .child(div().size(48).bg(`${color}40`).overflow_hidden().child(avatar)));
+}
+
+// 名册显示模式：file = 档案卡（大）、mini = 头像小方块；存在 shared 里，重启不丢
+const MODE = "kaiju.roster";
+const miniMode = () => shared(MODE) === "mini";
+
 function spaceHeader(t, s, i) {
   const slot = slotOf(s.id);
   return h_flex().id(`sp-${s.id}`).h(28).px(6).gap(8).flex_none().items_center().cursor_pointer()
@@ -319,18 +344,22 @@ export function roster(view, t, cx) {
   // 档案编号 = Agent 在列表里的顺序
   const no = new Map(list.map((a, k) => [a.address, k + 1]));
   // 每个 space 下的档案卡两列排
+  const mini = miniMode();
   const groups = spaces().map((s, i) => {
     const mine = list.filter((a) => a.space === s.id);
     return v_flex().gap(6).flex_none()
       .child(spaceHeader(t, s, i))
       .when(mine.length > 0, (el) => el.child(h_flex().flex_wrap().gap(6).items_start()
-        .children(mine.map((a) =>
-          card(t, a, mids.get(a.address), tabs.get(a.tab), now, damage[a.space], stats[a.address], no.get(a.address))))));
+        .children(mine.map((a) => mini
+          ? tile(t, a, mids.get(a.address), task(a))
+          : card(t, a, mids.get(a.address), tabs.get(a.tab), now, damage[a.space], stats[a.address], no.get(a.address))))));
   });
   return v_flex().size_full().px(10).pb(8)
     .child(h_flex().h(26).flex_none().items_center().justify_between()
       .child(div().text_size(12).text_color(t.dim).child("怪兽名册"))
       .child(h_flex().gap(2)
+        .child(button(t, "ros-mode", mini ? "mods/kaiju/icons/file.svg" : "mods/kaiju/icons/grid.svg",
+          mini ? "展开成档案卡" : "折叠成头像", () => setShared(MODE, mini ? "file" : "mini")))
         .child(button(t, "ros-new", "mods/workspace-chrome/plus.svg", "新建 space", () => run("space.new")))
         .child(button(t, "ros-close", "mods/workspace-chrome/chevron-left.svg", "收起（⌘B）", toggleSidebar))))
     .child(v_flex().id("ros-list").flex_1().min_h(0).gap(10).overflow_y_scrollbar()

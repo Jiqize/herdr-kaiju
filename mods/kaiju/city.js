@@ -4,7 +4,7 @@ import { div, image } from "gpui-kit";
 import { spaces, agents, setAgentOrder, run, props, shared, setShared } from "herdr";
 import M from "./manifest.js";
 import { asset, assign, behaviors, monsterOf, STATUS_TEXT } from "./state.js";
-// 怪兽画在楼之上；出场的只有 working / done / blocked
+// 怪兽和楼按前后关系叠放；出场的只有 working / done / blocked
 
 const W = M.canvas.w;
 const H = M.canvas.h;
@@ -145,11 +145,11 @@ export function city(view, t, cx) {
     if (b.mode === "wave") waiting.add(b.slot);
   }
 
-  // 楼按 depth 从后往前叠；怪兽一律画在所有楼之上（后排楼前的怪兽也不被前排楼挡住），彼此按 depth 排
+  // 楼和怪兽按真实前后关系从后往前叠：站位的 depth 已算好（挡住它的楼在前、被它挡的楼在后），怪兽脚踏实地
   const items = [];
   for (const s of M.slots) items.push({ depth: s.depth, order: 0, slot: s });
   for (const it of shown) items.push({ depth: it.pos.depth, order: 1, mon: it });
-  items.sort((x, y) => x.order - y.order || x.depth - y.depth);
+  items.sort((x, y) => x.depth - y.depth || x.order - y.order);
 
   const stage = div().relative().w(W).h(H).child(layer(t, "plate.png"));
   for (const it of items) {
