@@ -1,7 +1,7 @@
 // 城市沙盘：底座 + 8 个楼位（space = 楼）+ 怪兽（Agent），当前楼顶浮动箭头
 //   点楼切换 space，点怪兽跳到它的窗格
 import { div, image } from "gpui-kit";
-import { spaces, agents, setAgentOrder, run, props } from "herdr";
+import { spaces, agents, setAgentOrder, run, props, shared, setShared } from "herdr";
 import M from "./manifest.js";
 import { asset, assign, behaviors, monsterOf, STATUS_TEXT } from "./state.js";
 // 怪兽画在楼之上；出场的只有 working / done / blocked
@@ -11,6 +11,14 @@ const H = M.canvas.h;
 const SP = M.sprite;
 const RISE = 40;
 const WALK = 900;
+
+// 各楼损坏程度写进共享状态，名册卡片读它画损坏进度条；只在有变化时写
+function shareDamage(level) {
+  const obj = Object.fromEntries(level);
+  const old = shared("kaiju.damage") ?? {};
+  const same = Object.keys(obj).length === Object.keys(old).length && Object.entries(obj).every(([k, v]) => old[k] === v);
+  if (!same) setShared("kaiju.damage", obj);
+}
 
 // 一张全画布图层
 const layer = (t, name) => image(asset(t, name)).absolute().left(0).top(0).w(W).h(H);
@@ -119,6 +127,7 @@ export function city(view, t, cx) {
   const demo = props()?.demo;
   const ags = agentList();
   const level = demo?.damage ? null : view.damage.update(cx, ags);
+  if (level) shareDamage(level);
   const up = rising(view, list, cx);
   const dmgOf = (sp, s) => (demo?.damage ? demo.damage[s.i] ?? 0 : level.get(sp.id) ?? 0);
 

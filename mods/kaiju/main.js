@@ -31,7 +31,7 @@ export default class Kaiju extends View {
     if (props()?.pane) return this.paneHeader(t);
     const part = props()?.part;
     if (part === "city") return city(this, t, cx);
-    if (part === "roster") return roster(this, t);
+    if (part === "roster") return roster(this, t, cx);
     if (part === "top") return this.top(t);
     return div();
   }
