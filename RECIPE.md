@@ -56,7 +56,7 @@ Left to right, top to bottom:
 - Shipped mods and icons it uses: `menu`, `new-menu`, `files`, `changes`, and icons from `mods/workspace-chrome/`, `mods/pane/`, `mods/files/` and `mods/changes/`.
 - It runs no programs and makes no network calls.
 
-## Swap the monsters
+### Swapping the monsters
 
 1. Make a sprite sheet: one row of exactly 5 poses, left to right idle, walking, smashing, roaring, waving, on a plain white background with a clear gap between poses. The prompts in `art/ai/*/*.prompt.txt` show the style used here (chibi, big round head, dark 1 px outline, flat shading, facing down-right). Monsters must be original characters.
 2. Put it in `art/ai/<name>/<name>-sheet.png` and add `{"id": "<id>", "name": "<名字>", "sheet": "art/ai/<name>/<name>-sheet.png"}` to `art/roster.json`. The list order is the order agents get monsters; remove a line to drop a monster.
