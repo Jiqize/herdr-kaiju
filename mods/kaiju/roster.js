@@ -13,7 +13,7 @@ export const RAIL = 76;
 // 状态 → 头像表情帧
 const FACE = { idle: "idle", working: "smash", done: "roar", blocked: "wave" };
 // 状态徽章颜色（像素风纯色块）
-const BADGE = { working: "#e07a3c", done: "#d9573f", blocked: "#d8a548" };
+export const BADGE = { working: "#e07a3c", done: "#d9573f", blocked: "#d8a548" };
 
 const hotkey = (i) => (i < 9 ? `⌃${i + 1}` : "");
 const stop = (_e, cx) => cx.stop_propagation();
@@ -46,7 +46,7 @@ const spaceMenu = (s) => (_e, cx) => {
 };
 
 // 楼色小楼图标：楼身 + 2×2 像素窗
-function miniBuilding(color, size) {
+export function miniBuilding(color, size) {
   const w = Math.round(size * 0.55);
   const h = size;
   const win = div().flex().flex_wrap().gap(2).p(3).w(w).children(
