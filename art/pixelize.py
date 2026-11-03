@@ -19,7 +19,15 @@ a = np.asarray(im).astype(int)
 # 白底判定：接近白色且低饱和
 bright = a.min(axis=2)
 spread = a.max(axis=2) - a.min(axis=2)
-fg = ~((bright > 232) & (spread < 18))
+white = (bright > 232) & (spread < 18)
+# 只有从图片边缘连通过来的白色才是背景（角色身上被描边围住的白毛、白肚皮、高光保留）
+from PIL import ImageDraw
+wm = Image.fromarray((white * 255).astype(np.uint8)).copy()
+H_, W_ = white.shape
+for x, y in [(x, 0) for x in range(W_)] + [(x, H_ - 1) for x in range(W_)] + [(0, y) for y in range(H_)] + [(W_ - 1, y) for y in range(H_)]:
+    if wm.getpixel((x, y)) == 255:
+        ImageDraw.floodfill(wm, (x, y), 128)
+fg = np.array(wm) != 128
 
 # 按列切：连续前景列构成一个姿势，间隙不超过 gap 的合并
 cols = fg.sum(axis=0) > max(2, fg.shape[0] * 0.004)

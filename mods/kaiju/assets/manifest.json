@@ -409,6 +409,146 @@
     "wave": "monsters/crab/avatar-wave.png"
    },
    "face": "monsters/crab/face-roar.png"
+  },
+  {
+   "id": "axolotl",
+   "name": "美西螈",
+   "frames": {
+    "idle": "monsters/axolotl/idle.png",
+    "walk": "monsters/axolotl/walk.png",
+    "smash": "monsters/axolotl/smash.png",
+    "roar": "monsters/axolotl/roar.png",
+    "wave": "monsters/axolotl/wave.png",
+    "head": "monsters/axolotl/head-idle.png"
+   },
+   "heads": {
+    "idle": "monsters/axolotl/head-idle.png",
+    "walk": "monsters/axolotl/head-walk.png",
+    "smash": "monsters/axolotl/head-smash.png",
+    "roar": "monsters/axolotl/head-roar.png",
+    "wave": "monsters/axolotl/head-wave.png"
+   },
+   "top": 4,
+   "avatars": {
+    "idle": "monsters/axolotl/avatar-idle.png",
+    "walk": "monsters/axolotl/avatar-walk.png",
+    "smash": "monsters/axolotl/avatar-smash.png",
+    "roar": "monsters/axolotl/avatar-roar.png",
+    "wave": "monsters/axolotl/avatar-wave.png"
+   },
+   "face": "monsters/axolotl/face-roar.png"
+  },
+  {
+   "id": "yeti",
+   "name": "雪怪",
+   "frames": {
+    "idle": "monsters/yeti/idle.png",
+    "walk": "monsters/yeti/walk.png",
+    "smash": "monsters/yeti/smash.png",
+    "roar": "monsters/yeti/roar.png",
+    "wave": "monsters/yeti/wave.png",
+    "head": "monsters/yeti/head-idle.png"
+   },
+   "heads": {
+    "idle": "monsters/yeti/head-idle.png",
+    "walk": "monsters/yeti/head-walk.png",
+    "smash": "monsters/yeti/head-smash.png",
+    "roar": "monsters/yeti/head-roar.png",
+    "wave": "monsters/yeti/head-wave.png"
+   },
+   "top": 2,
+   "avatars": {
+    "idle": "monsters/yeti/avatar-idle.png",
+    "walk": "monsters/yeti/avatar-walk.png",
+    "smash": "monsters/yeti/avatar-smash.png",
+    "roar": "monsters/yeti/avatar-roar.png",
+    "wave": "monsters/yeti/avatar-wave.png"
+   },
+   "face": "monsters/yeti/face-roar.png"
+  },
+  {
+   "id": "moth",
+   "name": "巨蛾",
+   "frames": {
+    "idle": "monsters/moth/idle.png",
+    "walk": "monsters/moth/walk.png",
+    "smash": "monsters/moth/smash.png",
+    "roar": "monsters/moth/roar.png",
+    "wave": "monsters/moth/wave.png",
+    "head": "monsters/moth/head-idle.png"
+   },
+   "heads": {
+    "idle": "monsters/moth/head-idle.png",
+    "walk": "monsters/moth/head-walk.png",
+    "smash": "monsters/moth/head-smash.png",
+    "roar": "monsters/moth/head-roar.png",
+    "wave": "monsters/moth/head-wave.png"
+   },
+   "top": 3,
+   "avatars": {
+    "idle": "monsters/moth/avatar-idle.png",
+    "walk": "monsters/moth/avatar-walk.png",
+    "smash": "monsters/moth/avatar-smash.png",
+    "roar": "monsters/moth/avatar-roar.png",
+    "wave": "monsters/moth/avatar-wave.png"
+   },
+   "face": "monsters/moth/face-roar.png"
+  },
+  {
+   "id": "turtle",
+   "name": "巨龟",
+   "frames": {
+    "idle": "monsters/turtle/idle.png",
+    "walk": "monsters/turtle/walk.png",
+    "smash": "monsters/turtle/smash.png",
+    "roar": "monsters/turtle/roar.png",
+    "wave": "monsters/turtle/wave.png",
+    "head": "monsters/turtle/head-idle.png"
+   },
+   "heads": {
+    "idle": "monsters/turtle/head-idle.png",
+    "walk": "monsters/turtle/head-walk.png",
+    "smash": "monsters/turtle/head-smash.png",
+    "roar": "monsters/turtle/head-roar.png",
+    "wave": "monsters/turtle/head-wave.png"
+   },
+   "top": 3,
+   "avatars": {
+    "idle": "monsters/turtle/avatar-idle.png",
+    "walk": "monsters/turtle/avatar-walk.png",
+    "smash": "monsters/turtle/avatar-smash.png",
+    "roar": "monsters/turtle/avatar-roar.png",
+    "wave": "monsters/turtle/avatar-wave.png"
+   },
+   "face": "monsters/turtle/face-roar.png"
+  },
+  {
+   "id": "bat",
+   "name": "巨蝠",
+   "frames": {
+    "idle": "monsters/bat/idle.png",
+    "walk": "monsters/bat/walk.png",
+    "smash": "monsters/bat/smash.png",
+    "roar": "monsters/bat/roar.png",
+    "wave": "monsters/bat/wave.png",
+    "head": "monsters/bat/head-idle.png"
+   },
+   "heads": {
+    "idle": "monsters/bat/head-idle.png",
+    "walk": "monsters/bat/head-walk.png",
+    "smash": "monsters/bat/head-smash.png",
+    "roar": "monsters/bat/head-roar.png",
+    "wave": "monsters/bat/head-wave.png"
+   },
+   "top": 2,
+   "avatars": {
+    "idle": "monsters/bat/avatar-idle.png",
+    "walk": "monsters/bat/avatar-walk.png",
+    "smash": "monsters/bat/avatar-smash.png",
+    "roar": "monsters/bat/avatar-roar.png",
+    "wave": "monsters/bat/avatar-wave.png"
+   },
+   "face": "monsters/bat/face-roar.png"
   }
  ],
  "entry": {
@@ -423,10 +563,7 @@
   "zz": "fx/zz.png",
   "siren": "fx/siren.png",
   "brick": "fx/brick.png",
-  "i-task": "fx/i-task.png",
-  "i-pin": "fx/i-pin.png",
-  "i-clock": "fx/i-clock.png",
-  "i-rubble": "fx/i-rubble.png",
+  "clip": "fx/clip.png",
   "dust": "fx/dust.png"
  },
  "fxSize": {
@@ -454,21 +591,9 @@
    12,
    10
   ],
-  "i-task": [
-   10,
-   9
-  ],
-  "i-pin": [
-   10,
-   9
-  ],
-  "i-clock": [
-   10,
-   9
-  ],
-  "i-rubble": [
-   10,
-   9
+  "clip": [
+   6,
+   12
   ],
   "dust": [
    22,
@@ -476,9 +601,9 @@
   ]
  },
  "sprite": {
-  "w": 66,
+  "w": 68,
   "h": 62,
-  "ax": 33,
+  "ax": 34,
   "ay": 62
  }
 }

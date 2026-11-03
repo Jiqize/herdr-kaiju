@@ -13,5 +13,30 @@
     "id": "crab",
     "name": "巨蟹",
     "sheet": "art/ai/cand-crab/crab-sheet.png"
+  },
+  {
+    "id": "axolotl",
+    "name": "美西螈",
+    "sheet": "art/ai/cand-axolotl/axolotl-sheet.png"
+  },
+  {
+    "id": "yeti",
+    "name": "雪怪",
+    "sheet": "art/ai/cand-yeti/yeti-sheet.png"
+  },
+  {
+    "id": "moth",
+    "name": "巨蛾",
+    "sheet": "art/ai/cand-moth/moth-sheet.png"
+  },
+  {
+    "id": "turtle",
+    "name": "巨龟",
+    "sheet": "art/ai/cand-turtle/turtle-sheet.png"
+  },
+  {
+    "id": "bat",
+    "name": "巨蝠",
+    "sheet": "art/ai/cand-bat/bat-sheet.png"
   }
 ]

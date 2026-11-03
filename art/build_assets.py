@@ -228,47 +228,20 @@ KKKKKKKKKKKK
 KBBBBBKBBBBK
 KBBBBBKBBBBK
 KKKKKKKKKKKK""", {"K": "#6b3524", "B": "#d9673f"}),
-    # 名册卡片行首小图标：任务、位置、时钟、残楼（战绩）
-    "i-task": ("""
-KKKKKKK..
-KWWWWWKK.
-KWKKKWWK.
-KWWWWWWK.
-KWKKKKWK.
-KWWWWWWK.
-KWKKKWWK.
-KWWWWWWK.
-KKKKKKKK.""", {"K": "#6b655d", "W": "#fffdf5"}),
-    "i-pin": ("""
-..KKKKK..
-.KRRRRRK.
-KRRWWRRRK
-KRRWWRRRK
-KRRRRRRRK
-.KRRRRRK.
-..KRRRK..
-...KRK...
-....K....""", {"K": "#6b3524", "R": "#e8402f", "W": "#ffd0d0"}),
-    "i-clock": ("""
-..KKKKK..
-.KWWKWWK.
-KWWWKWWWK
-KWWWKWWWK
-KWWWKKKWK
-KWWWWWWWK
-KWWWWWWWK
-.KWWWWWK.
-..KKKKK..""", {"K": "#2b3a55", "W": "#cfe3ff"}),
-    "i-rubble": ("""
-..K..K...
-.KGKKGK..
-.KGGGGGK.
-.KGYGYGK.
-.KGGGGGK.
-.KGYGYGK.
-KKGGGGGKK
-KDDKDDKDK
-KKKKKKKKK""", {"K": "#2b2620", "G": "#a3acbd", "Y": "#ffd23f", "D": "#9b958c"}),
+    # 档案卡照片上的回形针
+    "clip": ("""
+.KKKK.
+KSSSSK
+KS..SK
+KS.KSK
+KS.KSK
+KS.KSK
+KS.KSK
+KSSKSK
+.KKKSK
+...KSK
+...KSK
+....K.""", {"K": "#5a5f6b", "S": "#d5d8de"}),
 }
 
 def fx_bitmap(art, colors, mode):
