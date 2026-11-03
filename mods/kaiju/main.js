@@ -12,6 +12,7 @@ import { city } from "./city.js";
 import { roster, toggleSidebar } from "./roster.js";
 import { top } from "./top.js";
 import { paneHeader } from "./pane.js";
+import { news } from "./news.js";
 
 export default class Kaiju extends View {
   init(_props, cx) {
@@ -35,6 +36,7 @@ export default class Kaiju extends View {
     if (part === "city") return city(this, t, cx);
     if (part === "roster") return roster(this, t, cx);
     if (part === "top") return top(this, t);
+    if (part === "news") return news(this, t, cx);
     return div();
   }
 }
