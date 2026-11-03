@@ -1,13 +1,15 @@
 # AI 动作表 → 像素精灵帧
-# 用法：python3 -I art/pixelize.py <动作表.png> <输出目录> [目标高度=56] [颜色数=20]
+# 用法：python3 -I art/pixelize.py <动作表.png> <输出目录> [目标高度=56] [颜色数=20] [--poses N]
 # 步骤：去白底 → 按列间空白切出每个姿势 → 统一缩放到目标高度 → 统一调色板 → 1 像素描边
 import os, sys
 import numpy as np
 from PIL import Image
 
-src, out = sys.argv[1], sys.argv[2]
-TARGET_H = int(sys.argv[3]) if len(sys.argv) > 3 else 56
-COLORS = int(sys.argv[4]) if len(sys.argv) > 4 else 32
+# 位置参数（去掉 --native、--poses N 这类选项）
+pos = [a for i, a in enumerate(sys.argv) if not a.startswith("--") and sys.argv[i - 1] != "--poses"]
+src, out = pos[1], pos[2]
+TARGET_H = int(pos[3]) if len(pos) > 3 else 56
+COLORS = int(pos[4]) if len(pos) > 4 else 32
 # 源图本身是像素画时：按像素格中心直接取色、不额外描边（--native）
 NATIVE = "--native" in sys.argv
 os.makedirs(out, exist_ok=True)
@@ -19,23 +21,33 @@ bright = a.min(axis=2)
 spread = a.max(axis=2) - a.min(axis=2)
 fg = ~((bright > 232) & (spread < 18))
 
-# 按列切：连续前景列构成一个姿势，间隙小于 gap 的合并
+# 按列切：连续前景列构成一个姿势，间隙不超过 gap 的合并
 cols = fg.sum(axis=0) > max(2, fg.shape[0] * 0.004)
+
+def split(gap):
+    spans, start, blank = [], None, 0
+    for x, on in enumerate(cols):
+        if on:
+            if start is None:
+                start = x
+            blank = 0
+        elif start is not None:
+            blank += 1
+            if blank > gap:
+                spans.append((start, x - blank))
+                start, blank = None, 0
+    if start is not None:
+        spans.append((start, len(cols) - 1))
+    return [s for s in spans if s[1] - s[0] > im.width * 0.03]
+
+# --poses N：已知姿势数时，姿势间空白很窄也能切开（间隙阈值从大往小试，直到正好 N 段）
+POSES = int(sys.argv[sys.argv.index("--poses") + 1]) if "--poses" in sys.argv else None
 gap = max(8, im.width // 120)
-spans, start, blank = [], None, 0
-for x, on in enumerate(cols):
-    if on:
-        if start is None:
-            start = x
-        blank = 0
-    elif start is not None:
-        blank += 1
-        if blank > gap:
-            spans.append((start, x - blank))
-            start, blank = None, 0
-if start is not None:
-    spans.append((start, len(cols) - 1))
-spans = [s for s in spans if s[1] - s[0] > im.width * 0.03]
+spans = split(gap)
+if POSES:
+    while len(spans) != POSES and gap > 0:
+        gap -= 1
+        spans = split(gap)
 
 # 每个姿势的上下边界
 boxes = []

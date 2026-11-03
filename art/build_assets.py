@@ -90,7 +90,7 @@ def to_night(arr):
 
 def pixelize(sheet):
     tmp = tempfile.mkdtemp(prefix="kaiju-px-")
-    subprocess.run([sys.executable, "-I", os.path.join(ART, "pixelize.py"), os.path.join(ROOT, sheet), tmp, str(SPRITE_H)],
+    subprocess.run([sys.executable, "-I", os.path.join(ART, "pixelize.py"), os.path.join(ROOT, sheet), tmp, str(SPRITE_H), "--poses", str(len(FRAMES))],
                    check=True, capture_output=True)
     frames = [np.asarray(Image.open(f"{tmp}/frame{k}.png").convert("RGBA")) for k in range(len(FRAMES))]
     assert not os.path.exists(f"{tmp}/frame{len(FRAMES)}.png"), f"{sheet}: 姿势数不是 {len(FRAMES)}"
@@ -105,15 +105,28 @@ def in_box(arr, bw, bh):
     box[bh - fh:, left:left + fw] = arr
     return box
 
+def face_center(arr):
+    # 五官中心：帧上 70% 里、轮廓内部（四邻都不透明）的很深像素 = 眼睛、嘴；找不到返回 None
+    top = arr[:round(arr.shape[0] * 0.7)]
+    a = top[:, :, 3] > 0
+    inner = np.zeros_like(a)
+    inner[1:-1, 1:-1] = a[1:-1, 1:-1] & a[:-2, 1:-1] & a[2:, 1:-1] & a[1:-1, :-2] & a[1:-1, 2:]
+    luma = top[:, :, :3].astype(int) @ np.array([299, 587, 114]) // 1000
+    ys, xs = np.where(inner & (luma < 45))
+    if len(xs) < 3:
+        return None
+    return int(round(xs.mean())), int(round(ys.mean()))
+
 def head_crop(arr, size):
-    # 头部：取帧的上 55%，按头部列范围居中裁进 size×size
-    fh = arr.shape[0]
-    top = arr[:round(fh * 0.55)]
-    x0, y0, x1, y1 = bbox(top)
-    cx = (x0 + x1) // 2
+    # 头部：按五官中心裁 size×size（背刺、翅膀不会把脸挤出框；弯腰的拆楼帧也能裁到脸）
+    x0, y0, x1, y1 = bbox(arr)
+    fc = face_center(arr)
+    cx, cy = fc if fc else ((x0 + x1) // 2, y0 + size // 2)
+    # 五官放在框里偏下一点（上面留给头顶），框不超出角色轮廓
+    left = min(max(cx - size // 2, x0), max(x0, x1 - size))
+    top = min(max(cy - size * 9 // 16, y0), max(y0, y1 - size))
     box = np.zeros((size, size, 4), dtype=np.uint8)
-    src = top[y0:y1, max(0, cx - size // 2):cx - size // 2 + size]
-    src = src[:size]
+    src = arr[top:top + size, left:left + size]
     oy = (size - src.shape[0]) // 2
     ox = (size - src.shape[1]) // 2
     box[oy:oy + src.shape[0], ox:ox + src.shape[1]] = src
@@ -215,6 +228,47 @@ KKKKKKKKKKKK
 KBBBBBKBBBBK
 KBBBBBKBBBBK
 KKKKKKKKKKKK""", {"K": "#6b3524", "B": "#d9673f"}),
+    # 名册卡片行首小图标：任务、位置、时钟、残楼（战绩）
+    "i-task": ("""
+KKKKKKK..
+KWWWWWKK.
+KWKKKWWK.
+KWWWWWWK.
+KWKKKKWK.
+KWWWWWWK.
+KWKKKWWK.
+KWWWWWWK.
+KKKKKKKK.""", {"K": "#6b655d", "W": "#fffdf5"}),
+    "i-pin": ("""
+..KKKKK..
+.KRRRRRK.
+KRRWWRRRK
+KRRWWRRRK
+KRRRRRRRK
+.KRRRRRK.
+..KRRRK..
+...KRK...
+....K....""", {"K": "#6b3524", "R": "#e8402f", "W": "#ffd0d0"}),
+    "i-clock": ("""
+..KKKKK..
+.KWWKWWK.
+KWWWKWWWK
+KWWWKWWWK
+KWWWKKKWK
+KWWWWWWWK
+KWWWWWWWK
+.KWWWWWK.
+..KKKKK..""", {"K": "#2b3a55", "W": "#cfe3ff"}),
+    "i-rubble": ("""
+..K..K...
+.KGKKGK..
+.KGGGGGK.
+.KGYGYGK.
+.KGGGGGK.
+.KGYGYGK.
+KKGGGGGKK
+KDDKDDKDK
+KKKKKKKKK""", {"K": "#2b2620", "G": "#a3acbd", "Y": "#ffd23f", "D": "#9b958c"}),
 }
 
 def fx_bitmap(art, colors, mode):

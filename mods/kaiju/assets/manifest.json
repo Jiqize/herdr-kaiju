@@ -423,6 +423,10 @@
   "zz": "fx/zz.png",
   "siren": "fx/siren.png",
   "brick": "fx/brick.png",
+  "i-task": "fx/i-task.png",
+  "i-pin": "fx/i-pin.png",
+  "i-clock": "fx/i-clock.png",
+  "i-rubble": "fx/i-rubble.png",
   "dust": "fx/dust.png"
  },
  "fxSize": {
@@ -449,6 +453,22 @@
   "brick": [
    12,
    10
+  ],
+  "i-task": [
+   10,
+   9
+  ],
+  "i-pin": [
+   10,
+   9
+  ],
+  "i-clock": [
+   10,
+   9
+  ],
+  "i-rubble": [
+   10,
+   9
   ],
   "dust": [
    22,
