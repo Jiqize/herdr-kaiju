@@ -1,0 +1,444 @@
+# 等距像素渲染器 v2：逐像素等距投影 + 深度缓冲 + 自动描边/高光 + 分层光照圆球（萌系怪兽）
+# 用法：python3 -I art/render.py <输出目录> [day|night]
+import math, sys
+import numpy as np
+from PIL import Image
+
+OUT = sys.argv[1]
+MODE = sys.argv[2] if len(sys.argv) > 2 else "day"
+NIGHT = MODE == "night"
+W, H = 320, 300
+OX, OY = 160, 96
+SCALE = 3
+
+def hexc(h):
+    return np.array([int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16), 255], dtype=float)
+
+def shade(c, k):
+    c = np.array(c, dtype=float)
+    rgb = c[:3] + (255 - c[:3]) * k if k >= 0 else c[:3] * (1 + k)
+    return np.array([*np.clip(rgb, 0, 255), c[3]])
+
+def night(c, k=-0.38):
+    return shade(c, k) if NIGHT else c
+
+# ---------- 画布缓冲 ----------
+COL = np.zeros((H, W, 4))
+DEP = np.full((H, W), -1e9)
+OBJ = np.zeros((H, W), dtype=int)      # 物体编号，0 = 空
+FACE = np.zeros((H, W), dtype=int)     # 0 无 / 1 顶面 / 2 左前面 / 3 右前面 / 4 精灵
+_next = [1]
+def new_obj():
+    _next[0] += 1
+    return _next[0]
+
+def plot(sx, sy, depth, color, obj, face):
+    if 0 <= sx < W and 0 <= sy < H and depth >= DEP[sy, sx]:
+        DEP[sy, sx] = depth
+        COL[sy, sx] = color
+        OBJ[sy, sx] = obj
+        FACE[sy, sx] = face
+
+def P(x, y, z=0.0):
+    return OX + (x - y), OY + (x + y) / 2 - z
+
+# 顶面：z 高度处的矩形 [x0,x1)×[y0,y1)，color(x,y) 返回颜色或 None
+def top(x0, y0, x1, y1, z, color, obj, face=1, bias=0.0):
+    pts = [P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)]
+    sxs = [p[0] for p in pts]; sys_ = [p[1] for p in pts]
+    for sy in range(int(min(sys_)) - 1, int(max(sys_)) + 2):
+        for sx in range(int(min(sxs)) - 1, int(max(sxs)) + 2):
+            a = sx + 0.5 - OX
+            b = 2 * (sy + 0.5 - OY + z)
+            x, y = (a + b) / 2, (b - a) / 2
+            if x0 <= x < x1 and y0 <= y < y1:
+                c = color(x, y)
+                if c is not None:
+                    plot(sx, sy, x + y + z + bias, c, obj, face)
+
+# 左前面：平面 y = yf，x∈[x0,x1)，z∈[z0,z1)
+def left(x0, x1, yf, z0, z1, color, obj):
+    for sx in range(int(OX + x0 - yf) - 1, int(OX + x1 - yf) + 2):
+        x = sx + 0.5 - OX + yf
+        if not (x0 <= x < x1):
+            continue
+        base = OY + (x + yf) / 2
+        for sy in range(int(base - z1) - 1, int(base - z0) + 2):
+            z = base - (sy + 0.5)
+            if z0 <= z < z1:
+                c = color(x - x0, z - z0)
+                if c is not None:
+                    plot(sx, sy, x + yf + z, c, obj, 2)
+
+# 右前面：平面 x = xf，y∈[y0,y1)
+def right(xf, y0, y1, z0, z1, color, obj):
+    for sx in range(int(OX + xf - y1) - 1, int(OX + xf - y0) + 2):
+        y = OX + xf - (sx + 0.5)
+        if not (y0 <= y < y1):
+            continue
+        base = OY + (xf + y) / 2
+        for sy in range(int(base - z1) - 1, int(base - z0) + 2):
+            z = base - (sy + 0.5)
+            if z0 <= z < z1:
+                c = color(y - y0, z - z0)
+                if c is not None:
+                    plot(sx, sy, xf + y + z, c, obj, 3)
+
+def box(x, y, z, w, d, h, ctop, cleft, cright, obj=None):
+    obj = obj or new_obj()
+    left(x, x + w, y + d, z, z + h, cleft if callable(cleft) else (lambda u, v: cleft), obj)
+    right(x + w, y, y + d, z, z + h, cright if callable(cright) else (lambda u, v: cright), obj)
+    top(x, y, x + w, y + d, z + h, ctop if callable(ctop) else (lambda a, b: ctop), obj)
+    return obj
+
+# ---------- 建筑 ----------
+LIT = hexc("#ffd877")
+def rnd(*k):
+    return (hash(k) & 0xffff) / 0xffff
+
+def building(x, y, w, d, h, color, kind="grid", broken=None):
+    base = night(hexc(color))
+    l, r, t = base, shade(base, -0.24), shade(base, 0.22)
+    glass_l, glass_r = shade(base, -0.5), shade(base, -0.58)
+    def facade(face_col, glass, seed):
+        def f(u, v):
+            iu, iv = int(u), int(v)
+            if broken and v > broken(u, seed):
+                return None
+            if v < 3 or v > h - 3:
+                return face_col
+            if kind == "grid":
+                cu, cv = iu % 4, (iv - 3) % 6
+                if cu in (1, 2) and 1 <= cv <= 3 and 1 < u < (w if seed == 0 else d) - 1:
+                    if NIGHT and rnd(x, y, seed, iu // 4, iv // 6) < 0.38:
+                        return LIT if cv > 1 else shade(LIT, 0.3)
+                    return shade(glass, 0.35) if (cu == 1 and cv == 1) else glass
+                if cv == 0:
+                    return shade(face_col, -0.06)
+                return face_col
+            # glass 塔：竖条玻璃 + 斜向反光
+            cu = iu % 3
+            if cu == 0:
+                return shade(face_col, 0.08)
+            refl = 0 < (u + v * 0.55) - (h * 0.55) < 5 or 0 < (u + v * 0.55) - (h * 0.25) < 2
+            if NIGHT and rnd(x, y, seed, iu // 3, iv // 4) < 0.3:
+                return LIT
+            return shade(glass, 0.45) if refl else glass
+        return f
+    obj = new_obj()
+    left(x, x + w, y + d, 0, h, facade(l, glass_l, 0), obj)
+    right(x + w, y, y + d, 0, h, facade(r, glass_r, 1), obj)
+    if broken:
+        return obj
+    # 楼顶：外圈女儿墙亮，内部略暗
+    def roof(a, b):
+        rim = a < x + 1.2 or b < y + 1.2 or a > x + w - 1.2 or b > y + d - 1.2
+        return t if rim else shade(t, -0.12)
+    top(x, y, x + w, y + d, h, roof, obj)
+    # 楼顶设备
+    box(x + 2, y + 2, h, 5, 4, 3, shade(t, 0.1), shade(l, 0.1), shade(r, 0.1))
+    if w > 14:
+        box(x + w - 7, y + d - 7, h, 4, 4, 2, shade(t, -0.05), shade(l, 0.05), r)
+    if h > 70:
+        ax, ay = P(x + w / 2, y + d / 2, h)
+        aid = new_obj()
+        for k in range(14):
+            plot(int(ax), int(ay) - k, x + y + w + d + h + 2, hexc("#5b616c"), aid, 4)
+        if NIGHT:
+            plot(int(ax), int(ay) - 14, x + y + w + d + h + 3, hexc("#ff5252"), aid, 4)
+    return obj
+
+# ---------- 萌系圆球精灵 ----------
+LIGHT = np.array([-0.55, -0.65, 0.52]); LIGHT /= np.linalg.norm(LIGHT)
+
+class Sprite:
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.c = np.zeros((h, w, 4))
+        self.part = np.zeros((h, w), dtype=int)
+        self.n = 0
+    def blob(self, cx, cy, rx, ry, pal, clip=None):
+        # pal: [高光, 亮, 中, 暗]，按法线与光照分四档
+        self.n += 1
+        for yy in range(int(cy - ry) - 1, int(cy + ry) + 2):
+            for xx in range(int(cx - rx) - 1, int(cx + rx) + 2):
+                dx, dy = (xx + 0.5 - cx) / rx, (yy + 0.5 - cy) / ry
+                r2 = dx * dx + dy * dy
+                if r2 > 1 or not (0 <= xx < self.w and 0 <= yy < self.h):
+                    continue
+                if clip and not clip(xx, yy):
+                    continue
+                nz = math.sqrt(1 - r2)
+                k = dx * LIGHT[0] + dy * LIGHT[1] + nz * LIGHT[2]
+                c = pal[0] if k > 0.86 else pal[1] if k > 0.55 else pal[2] if k > 0.12 else pal[3]
+                self.c[yy, xx] = c
+                self.part[yy, xx] = self.n
+    def dot(self, x, y, c):
+        if 0 <= x < self.w and 0 <= y < self.h:
+            self.c[y, x] = c
+            self.part[y, x] = 999
+    def rect(self, x0, y0, x1, y1, c):
+        for yy in range(y0, y1):
+            for xx in range(x0, x1):
+                self.dot(xx, yy, c)
+    def eye(self, cx, cy, rx=2.6, ry=3.4):
+        for yy in range(int(cy - ry) - 1, int(cy + ry) + 2):
+            for xx in range(int(cx - rx) - 1, int(cx + rx) + 2):
+                dx, dy = (xx + 0.5 - cx) / rx, (yy + 0.5 - cy) / ry
+                if dx * dx + dy * dy <= 1:
+                    self.dot(xx, yy, hexc("#1a1c26"))
+        self.rect(int(cx - rx + 1), int(cy - ry + 1), int(cx - rx + 3), int(cy - ry + 3), hexc("#ffffff"))
+        self.dot(int(cx + rx - 1), int(cy + ry - 2), hexc("#ffffff"))
+    def outline(self):
+        a = self.c[:, :, 3] > 0
+        out = self.c.copy()
+        for yy in range(self.h):
+            for xx in range(self.w):
+                if a[yy, xx]:
+                    # 内部不同部件交界处画柔和分界线
+                    for dx, dy in ((1, 0), (0, 1)):
+                        nx, ny = xx + dx, yy + dy
+                        if nx < self.w and ny < self.h and a[ny, nx] and self.part[ny, nx] != self.part[yy, xx] \
+                                and self.part[yy, xx] != 999 and self.part[ny, nx] != 999 and self.part[ny, nx] < self.part[yy, xx]:
+                            out[ny, nx] = shade(self.c[ny, nx], -0.22)
+                    continue
+                nb = [self.c[yy + dy, xx + dx] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                      if 0 <= xx + dx < self.w and 0 <= yy + dy < self.h and a[yy + dy, xx + dx]]
+                if nb:
+                    dark = min(nb, key=lambda c: c[0] + c[1] + c[2])
+                    out[yy, xx] = shade(dark, -0.62)
+        self.c = out
+    def place(self, wx, wy, wz=0.0, flip=False):
+        # 精灵脚底中点对准世界坐标；深度按脚底 + 高度
+        sx0, sy0 = P(wx, wy, wz)
+        obj = new_obj()
+        for yy in range(self.h):
+            for xx in range(self.w):
+                c = self.c[yy, xx if not flip else self.w - 1 - xx]
+                if c[3] == 0:
+                    continue
+                up = self.h - 1 - yy
+                plot(int(sx0 - self.w / 2 + xx), int(sy0 - self.h + 1 + yy), wx + wy + wz + up * 0.5 + 6, c, obj, 4)
+
+def sprite_png(path):
+    # 读入像素化后的 AI 精灵帧
+    im = np.asarray(Image.open(path).convert("RGBA")).astype(float)
+    sp = Sprite(im.shape[1], im.shape[0])
+    sp.c = im
+    if NIGHT:
+        sp.c[:, :, :3] *= 0.78
+    return sp
+
+def pal(h):
+    b = night(hexc(h), -0.15)
+    return [shade(b, 0.45), shade(b, 0.18), b, shade(b, -0.32)]
+
+def lizard():
+    s = Sprite(64, 66)
+    skin, belly, fin = pal("#4a6b78"), pal("#b9d3c8"), pal("#8fe3ff" if NIGHT else "#9fd6e6")
+    s.blob(14, 52, 13, 7, skin)                 # 尾巴
+    s.blob(5, 49, 5, 4, skin)
+    for (fx, fy, rx, ry) in [(15, 9, 4, 5), (10, 18, 4.5, 5.5), (8, 29, 4.5, 5.5), (8, 40, 4, 5), (8, 50, 3.5, 4.2)]:
+        s.blob(fx, fy, rx, ry, fin)             # 背鳍（圆角，从背后露出）
+    s.blob(30, 47, 14, 14, skin)                # 身体
+    s.blob(34, 50, 8, 9, belly)                 # 肚皮
+    s.blob(24, 61, 6, 4.5, skin)                # 脚
+    s.blob(38, 61, 6, 4.5, skin)
+    s.blob(44, 42, 4.5, 4, skin)                # 小手
+    s.blob(33, 24, 17, 15, skin)                # 大头
+    s.blob(45, 29, 8, 6.5, skin)                # 吻部
+    s.blob(24, 8, 2.5, 3.5, fin); s.blob(31, 6, 2.5, 3.5, fin)   # 头顶小角
+    s.eye(35, 22); s.eye(45, 22)
+    # 腮红 + 小嘴 + 牙
+    s.rect(29, 28, 32, 30, hexc("#ff9fb2")); s.rect(47, 28, 50, 30, hexc("#ff9fb2"))
+    s.rect(40, 31, 46, 32, hexc("#2b2f3a")); s.dot(42, 32, hexc("#ffffff"))
+    s.outline()
+    return s
+
+def ape():
+    s = Sprite(60, 62)
+    fur, face, dark = pal("#7a5238"), pal("#e8c39e"), pal("#5a3a28")
+    s.eye = Sprite.eye.__get__(s)
+    s.blob(12, 40, 6, 13, fur)                  # 长手臂（后）
+    s.blob(30, 44, 15, 14, fur)                 # 身体
+    s.blob(31, 47, 8, 8, face)                  # 胸口
+    s.blob(22, 58, 6, 4, dark)                  # 脚
+    s.blob(38, 58, 6, 4, dark)
+    s.blob(49, 42, 6, 12, fur)                  # 长手臂（前）
+    s.blob(50, 54, 5.5, 4.5, dark)              # 拳头
+    s.blob(12, 52, 5, 4, dark)
+    s.blob(16, 20, 4.5, 5, fur)                 # 耳朵
+    s.blob(46, 20, 4.5, 5, fur)
+    s.blob(31, 21, 16, 15, fur)                 # 大头
+    s.blob(31, 25, 11, 9, face)                 # 脸
+    s.blob(31, 30, 7, 4.5, face)                # 嘴部
+    s.eye(26, 22, 2.4, 3.1); s.eye(36, 22, 2.4, 3.1)
+    s.rect(29, 28, 31, 29, hexc("#3a2418")); s.rect(32, 28, 34, 29, hexc("#3a2418"))   # 鼻孔
+    s.rect(27, 32, 36, 33, hexc("#3a2418"))
+    s.rect(21, 27, 24, 29, hexc("#ff9f9f")); s.rect(38, 27, 41, 29, hexc("#ff9f9f"))
+    s.outline()
+    return s
+
+def puff(cx, cy, scale=1.0):
+    s = Sprite(int(30 * scale) + 4, int(22 * scale) + 4)
+    c = pal("#efe4cf" if not NIGHT else "#8a8378")
+    for (x, y, r) in [(9, 14, 7), (19, 13, 8), (14, 8, 7), (24, 16, 5.5)]:
+        s.blob(x * scale + 2, y * scale + 2, r * scale, r * scale * 0.9, c)
+    s.outline()
+    return s
+
+# ---------- 场景 ----------
+S, T = 140, 16
+wx0, wy0 = 30, 98         # 海区（前左角）
+gnd = night(hexc("#d4cfc5"))
+side = night(hexc("#a39d92"))
+
+def ground(x, y):
+    if wx0 <= x < S - 34 and y >= wy0:
+        return None
+    on_road_x = 60 <= y < 76
+    on_road_y = 62 <= x < 78 and y < wy0
+    if on_road_x or on_road_y:
+        c = night(hexc("#4b4f57"))
+        if on_road_x and 67.5 <= y < 68.5 and int(x) % 10 < 5 and not 60 <= x < 80:
+            return night(hexc("#f1f1f1"))
+        if on_road_y and 69.5 <= x < 70.5 and int(y) % 10 < 5 and not 58 <= y < 78:
+            return night(hexc("#f1f1f1"))
+        # 斑马线
+        if on_road_x and 55 <= x < 60 and int(y) % 3 == 0:
+            return night(hexc("#eeeeee"))
+        return c
+    # 人行道边缘（贴路一圈浅色路沿）
+    near = (57 <= y < 60) or (76 <= y < 79) or (59 <= x < 62 and y < wy0) or (78 <= x < 81 and y < wy0)
+    if near:
+        return shade(gnd, 0.12)
+    # 地砖缝
+    if int(x) % 8 == 0 or int(y) % 8 == 0:
+        return shade(gnd, -0.05)
+    return gnd
+
+pid = new_obj()
+# 底座侧面：上沿浅色混凝土 + 深色土层 + 底线
+def slab_side(col):
+    def f(u, v):
+        if v > T - 3:
+            return shade(col, 0.15)
+        if v < 2:
+            return hexc("#2c2724")
+        if rnd(int(u), int(v)) < 0.08:
+            return shade(col, -0.45)
+        return shade(col, -0.32)
+    return f
+left(0, wx0, S, -T, 0, slab_side(side), pid)
+left(S - 34, S, S, -T, 0, slab_side(side), pid)
+right(S, 0, S, -T, 0, slab_side(shade(side, -0.12)), pid)
+top(0, 0, S, S, 0, ground, pid)
+
+# 海：水面 z=-4，剖面渐变 + 浪花
+water = night(hexc("#3c9fe6"), -0.3)
+wid = new_obj()
+def wtop(x, y):
+    if y < wy0 + 3 + 2 * math.sin(x * 0.5):
+        return shade(water, 0.85)
+    if int(y) % 6 == 0 and rnd(int(x / 4), int(y)) < 0.35:
+        return shade(water, 0.6)
+    return water if int(y) % 12 < 6 else shade(water, 0.06)
+top(wx0, wy0, S - 34, S, -4, wtop, wid)
+def wside(u, v):
+    k = v / (T - 4)
+    c = shade(water, -0.45 + 0.4 * k)
+    if v > T - 6:
+        return shade(water, 0.55) if int(u) % 4 else shade(water, 0.2)
+    return c
+left(wx0, S - 34, S, -T, -4, wside, wid)
+# 岸墙
+left(wx0, S - 34, wy0, -4, 0, lambda u, v: shade(side, -0.1), new_obj())
+right(wx0, wy0, S, -4, 0, lambda u, v: shade(side, -0.25), new_obj())
+right(S - 34, wy0, S, -4, 0, lambda u, v: shade(side, -0.1), new_obj())
+
+# 建筑
+building(8, 6, 22, 22, 78, "#6f8fc9")
+building(36, 8, 18, 18, 44, "#d9573f")
+building(84, 4, 26, 26, 122, "#a3acbd", kind="glass")
+building(114, 36, 20, 20, 58, "#ddd5c1")
+building(36, 32, 18, 20, 56, "#5fae6e")
+building(8, 80, 18, 12, 30, "#d8a548")
+building(84, 82, 20, 12, 22, "#c87fb0")
+# 被啃的橙楼：顶部锯齿缺口
+building(84, 36, 22, 18, 88, "#e07a3c", broken=lambda u, seed: 62 + 10 * abs(math.sin(u * 0.45 + seed)) + (14 if u < 8 else 0))
+building(84, 36, 22, 18, 60, "#e07a3c")
+
+# 树、路灯、小车
+for (tx, ty) in [(31, 56), (45, 56), (31, 80), (112, 80), (124, 80), (56, 30), (56, 48)]:
+    t = Sprite(9, 12)
+    t.rect(4, 8, 5, 12, hexc("#6b4a33"))
+    t.blob(4.5, 5, 4.2, 4.2, pal("#55b06a"))
+    t.outline()
+    t.place(tx, ty)
+for (cx, cy, col) in [(20, 64, "#e8463b"), (40, 71, "#f2c14e"), (66, 30, "#4a8fe8"), (73, 44, "#ffffff"), (110, 64, "#3fb07a")]:
+    horiz = 60 <= cy < 76
+    w_, d_ = (6, 3) if horiz else (3, 6)
+    c0 = night(hexc(col), -0.25)
+    box(cx, cy, 0, w_, d_, 2, shade(c0, 0.2), c0, shade(c0, -0.25))
+    box(cx + (1 if horiz else 0.5), cy + (0.5 if horiz else 1), 2, w_ - 2 if horiz else 2, d_ - 1 if horiz else d_ - 2, 1.5,
+        hexc("#bfe3ff") if not NIGHT else hexc("#ffe39a"), hexc("#7fa6c4"), hexc("#6a8aa3"))
+
+# 碎石 + 地裂
+for i in range(22):
+    rx, ry = 100 + (i * 7) % 30, 54 + (i * 11) % 24
+    c = night(hexc("#e07a3c") if i % 3 == 0 else hexc("#9a8f84"))
+    box(rx, ry, 0, 1.5 + i % 3, 1.5 + (i * 2) % 3, 1 + i % 3, shade(c, 0.2), c, shade(c, -0.3))
+
+# 怪兽
+import os
+LIZ = os.environ.get("LIZARD_FRAME")
+SPR = os.environ.get("SPRITES")  # "路径:x:y;路径:x:y" 依次摆放
+if SPR:
+    for item in SPR.split(";"):
+        path, sx_, sy_ = item.rsplit(":", 2)
+        sprite_png(path).place(float(sx_), float(sy_))
+elif LIZ:
+    sprite_png(LIZ).place(118, 72)
+else:
+    lizard().place(116, 72)
+    ape().place(30, 66, flip=False)
+puff(0, 0, 1.0).place(100, 44, 66)
+puff(0, 0, 0.7).place(108, 62, 30)
+puff(0, 0, 0.6).place(36, 74, 8)
+
+# ---------- 描边与高光（建筑类） ----------
+out = COL.copy()
+for y in range(1, H - 1):
+    for x in range(1, W - 1):
+        o = OBJ[y, x]
+        if o == 0 or FACE[y, x] == 4:
+            continue
+        # 与其他物体（在其后方）或空白相邻 → 深色描边
+        edge = False
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            o2 = OBJ[y + dy, x + dx]
+            if o2 == 0 or (o2 != o and DEP[y + dy, x + dx] < DEP[y, x] - 2):
+                edge = True
+        if edge and o != pid:
+            out[y, x] = shade(COL[y, x], -0.55)
+            continue
+        # 顶面与侧面交界 → 顶面一侧提亮
+        if FACE[y, x] == 1 and (FACE[y + 1, x] in (2, 3)) and OBJ[y + 1, x] == o:
+            out[y, x] = shade(COL[y, x], 0.35)
+        # 左右面竖棱 → 左面一侧提亮
+        if FACE[y, x] == 2 and FACE[y, x + 1] == 3 and OBJ[y, x + 1] == o:
+            out[y, x] = shade(COL[y, x], 0.2)
+
+img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+
+# 投影 + 舞台
+stage = Image.new("RGBA", (W, H), tuple(hexc("#0e1117" if NIGHT else "#f5f5f4").astype(int)))
+sh = np.zeros((H, W, 4), dtype=np.uint8)
+corners = [P(-4, -4, -T), P(S + 10, -4, -T), P(S + 10, S + 10, -T), P(-4, S + 10, -T)]
+from PIL import ImageDraw
+shimg = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+ImageDraw.Draw(shimg).polygon([(x + 4, y + 6) for x, y in corners], fill=(0, 0, 0, 34 if not NIGHT else 110))
+stage.alpha_composite(shimg)
+stage.alpha_composite(img)
+stage.resize((W * SCALE, H * SCALE), Image.NEAREST).save(f"{OUT}/render-{MODE}.png")
+print("ok", MODE)

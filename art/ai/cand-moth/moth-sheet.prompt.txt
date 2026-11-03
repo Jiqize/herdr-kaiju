@@ -1,0 +1,14 @@
+Generate exactly ONE PNG image: a pixel-art character sprite sheet of ONE original cute chibi kaiju monster, a baby giant moth kaiju. Use the attached lizard sprite sheet ONLY as a STYLE and LAYOUT reference; do not copy the dinosaur or any franchise character.
+
+Match reference canvas aspect ratio 3:1, ideally 2048 x 683, one horizontal row of exactly FIVE evenly spaced fully visible poses. Match reference character height and visual scale, margins, baseline, chunky visible square pixel size, dark one-logical-pixel outline, flat 3–4-tone cel shading, chibi proportions with huge round head about half the total height, small chubby upright body, stubby limbs, cute glossy black round eyes with white highlights, soft pink cheeks. Crisp pixel-art edges, no smooth vector curves or airbrush.
+
+Original moth design consistent in all five poses: fluffy cream-yellow round head and body, two feathery antennae, tiny legs, stubby little arms, big soft rounded warm-orange wings with simple round eye-spot patterns. Cream/yellow fur and warm orange wings, same design, markings and palette in every pose. Wings broad and rounded but each whole character fits cleanly inside its own equally spaced slot without touching adjacent poses. 3/4 isometric view facing down-right except the requested head turns. No dinosaur spines, reptile tail, armor, accessories or franchise-specific markings.
+
+Five poses LEFT TO RIGHT:
+1 idle standing upright;
+2 walking mid-step, one tiny foot lifted;
+3 smashing forward, leaning into a clear little punch or charge;
+4 roaring, head tilted up with mouth wide open, NO beam;
+5 turning to look at viewer and waving a stubby arm.
+
+Pure solid white background. No text, no labels, no grid, no ground shadow, no border. All five poses are the SAME moth character, not five different designs.
