@@ -3,7 +3,7 @@
 // 侧栏收起（< 160px）时改画窄栏：每个 space 一块小楼图标 + 状态灯
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, agents, run, openOverlay, window, layout, shared, setShared } from "herdr";
+import { spaces, agents, run, openOverlay, window, layout, shared, setShared, props } from "herdr";
 import M from "./manifest.js";
 import { asset, assign, monsterOf, slotOf, slotColor, isNight, shadowColor, FACE, find, STATUS_TEXT } from "./state.js";
 
@@ -271,7 +271,13 @@ function tile(t, a, mid, what) {
 
 // 名册显示模式：file = 档案卡（大）、mini = 头像小方块；存在 shared 里，重启不丢
 const MODE = "kaiju.roster";
-const miniMode = () => shared(MODE) === "mini";
+const miniMode = () => (props()?.demo?.mode ?? shared(MODE)) === "mini";
+
+// props().demo.spaces：截图用，名册只列这些名字的 space（不露出其他 space）
+const listed = () => {
+  const only = props()?.demo?.spaces;
+  return only ? spaces().filter((s) => only.includes(s.name)) : spaces();
+};
 
 function spaceHeader(t, s, i) {
   const slot = slotOf(s.id);
@@ -332,7 +338,8 @@ export function roster(view, t, cx) {
   const no = new Map(list.map((a, k) => [a.address, k + 1]));
   // 每个 space 下的档案卡两列排
   const mini = miniMode();
-  const groups = spaces().map((s, i) => {
+  const groups = listed().map((s) => {
+    const i = spaces().findIndex((x) => x.id === s.id);
     const mine = list.filter((a) => a.space === s.id);
     return v_flex().gap(6).flex_none()
       .child(spaceHeader(t, s, i))
