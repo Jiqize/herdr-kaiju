@@ -1,5 +1,6 @@
 // Kaiju City 的纯逻辑：素材路径、昼夜判断、space→楼位映射、楼的损坏程度
 import { spaces, shared, setShared } from "herdr";
+import { S } from "./strings.js";
 import M from "./manifest.js";
 
 const ASSETS = "mods/kaiju/assets";
@@ -126,7 +127,7 @@ export class Damage {
 }
 
 // ---------- 怪兽 ----------
-export const STATUS_TEXT = { idle: "睡觉中", working: "拆楼中", done: "拆完了", blocked: "等你" };
+export const statusText = (status) => S().status[status];
 const MODE = { working: "smash", done: "roar", blocked: "wave" };
 const BUBBLE = { roar: "bang", wave: "question" };
 const KEY = "kaiju.monsters";

@@ -10,6 +10,7 @@ import { props, theme, nextCommand } from "herdr";
 import { Damage } from "./state.js";
 import { city } from "./city.js";
 import { roster, toggleSidebar } from "./roster.js";
+import { toggleLang } from "./strings.js";
 import { top } from "./top.js";
 import { paneHeader } from "./pane.js";
 import { news } from "./news.js";
@@ -17,12 +18,13 @@ import { news } from "./news.js";
 export default class Kaiju extends View {
   init(_props, cx) {
     this.damage = new Damage();
-    // 只有名册这一份接快捷键命令（keys.json: "cmd-b": "kaiju.toggle"），避免多份抢命令
+    // 只有名册这一份接命令（keys.json: "cmd-b": "kaiju.toggle"；`herdr-app do kaiju.lang` 切换语言），避免多份抢命令
     if (props()?.part === "roster") {
       cx.spawn(async (cx) => {
         for (;;) {
           const c = await nextCommand();
           if (c.endsWith("toggle")) toggleSidebar();
+          else if (c.endsWith("lang")) toggleLang();
           cx.notify();
         }
       });

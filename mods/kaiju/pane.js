@@ -4,6 +4,7 @@ import { h_flex } from "gpui-base";
 import { panes, agents, props, run, home } from "herdr";
 import { headIcon } from "./top.js";
 import { BADGE } from "./roster.js";
+import { S } from "./strings.js";
 
 function folder(cwd) {
   if (!cwd) return "";
@@ -30,7 +31,7 @@ export function paneHeader(view, t) {
     .child(headIcon(t, a))
     .child(div().flex_none().max_w(260).truncate().text_color(t.foreground).child(name))
     .child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(folder(p.cwd)))
-    .when(p.status === "blocked", (el) => el.child(div().flex_none().px(4).bg(BADGE.blocked).text_color("#2b2620").child("等你")))
+    .when(p.status === "blocked", (el) => el.child(div().flex_none().px(4).bg(BADGE.blocked).text_color("#2b2620").child(S().waiting)))
     .when(hovered, (el) => el
       .child(button(`kh-r-${pane}`, "split-right", "pane.split", { direction: "right", pane }))
       .child(button(`kh-d-${pane}`, "split-down", "pane.split", { direction: "down", pane }))
