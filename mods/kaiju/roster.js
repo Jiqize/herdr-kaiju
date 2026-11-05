@@ -5,7 +5,8 @@ import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, agents, run, openOverlay, window, layout, shared, setShared, props } from "herdr";
 import M from "./manifest.js";
-import { asset, assign, monsterOf, slotOf, slotColor, isNight, shadowColor, FACE, find, STATUS_TEXT } from "./state.js";
+import { asset, assign, monsterOf, slotOf, slotColor, isNight, shadowColor, FACE, find, statusText } from "./state.js";
+import { S, lang, monsterName, toggleLang } from "./strings.js";
 
 export const WIDE = 400;
 export const RAIL = 76;
@@ -51,26 +52,25 @@ function statusLight(t, status) {
   return d;
 }
 
-const DAMAGE = ["完好", "轻损", "重损", "废墟"];
+const DAMAGE = () => S().damage;
 
 // 「3 分钟」「1 小时 5 分」「刚刚」
 function ago(ms) {
   const m = Math.floor(ms / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟`;
-  return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+  if (m < 1) return null;
+  if (m < 60) return S().minutes(m);
+  return S().hoursMinutes(Math.floor(m / 60), m % 60);
 }
 
 // 计时文字：拆楼按开始干活算，等你 / 拆完了按状态变化时间算；睡觉中不显示
 function timer(a, tab, now) {
   if (a.status === "working" && tab?.working_since) {
     const d = ago(now - tab.working_since);
-    return d === "刚刚" ? "刚开拆" : `拆了 ${d}`;
+    return S().smashing(d);
   }
   if ((a.status === "blocked" || a.status === "done") && tab?.changed_at) {
     const d = ago(now - tab.changed_at);
-    if (a.status === "blocked") return d === "刚刚" ? "刚开始等" : `等了 ${d}`;
-    return d === "刚刚" ? "刚拆完" : `${d}前拆完`;
+    return a.status === "blocked" ? S().waitingFor(d) : S().finished(d);
   }
   return "";
 }
@@ -97,12 +97,7 @@ function place(a) {
 }
 
 // 怪兽口吻的一句状态说明
-const QUIP = {
-  idle: "呼呼大睡，等你派活",
-  working: "正在啃这栋楼",
-  done: "拆完了！在废墟上咆哮",
-  blocked: "举着牌子等你回话",
-};
+const QUIP = () => S().quip;
 
 // ---------- 战绩：累计拆楼次数 + 今天干活时长 ----------
 // 存在 shared("kaiju.stats")（会落盘，重启 Herdr 不清零）；只在状态变化时写
@@ -156,9 +151,10 @@ function workTime(v, now) {
 // 短写时长（档案卡一行放得下）：「1 时 5 分」「12 分」「<1 分」「0 分」
 function dur(ms) {
   const m = Math.floor(ms / 60000);
-  if (m < 1) return ms > 0 ? "<1 分" : "0 分";
-  if (m < 60) return `${m} 分`;
-  return `${Math.floor(m / 60)} 时 ${m % 60} 分`;
+  const d = S().durShort;
+  if (m < 1) return ms > 0 ? d.lt1 : d.zero;
+  if (m < 60) return d.min(m);
+  return d.hm(Math.floor(m / 60), m % 60);
 }
 
 // 4 格像素损坏条
@@ -167,7 +163,7 @@ function damageBar(t, lvl, P) {
   return h_flex().gap(4).items_center()
     .child(h_flex().gap(1).children([0, 1, 2, 3].map((k) =>
       div().w(9).h(6).bg(k <= lvl ? fill : P.tab).border(1).border_color("#00000040"))))
-    .child(div().text_size(12).text_color(P.label).child(DAMAGE[lvl]));
+    .child(div().text_size(12).text_color(P.label).child(DAMAGE()[lvl]));
 }
 
 // 48px 怪兽头像（随状态换表情），放在楼色淡底里；拆楼中轻轻抖（原生 loop）
@@ -185,12 +181,7 @@ function paperOf(t) {
 }
 
 // 状态印章：文字 + 颜色
-const STAMP = {
-  idle: ["睡觉中", "#8a8f99"],
-  working: ["拆楼中", "#e07a3c"],
-  done: ["拆完了", "#d9573f"],
-  blocked: ["等你", "#c99a1e"],
-};
+const STAMP_COLOR = { idle: "#8a8f99", working: "#e07a3c", done: "#d9573f", blocked: "#c99a1e" };
 
 export const CARD_W = 184;
 
@@ -203,10 +194,11 @@ function card(t, a, mid, tab, now, dmg, stat, no) {
   const time = timer(a, tab, now);
   const shadow = shadowColor(t);
   const edge = a.focused ? t.input : P.line;
-  const [stampText, stampColor] = STAMP[a.status] ?? STAMP.idle;
+  const stampColor = STAMP_COLOR[a.status] ?? STAMP_COLOR.idle;
+  const stampText = S().status[a.status] ?? S().status.idle;
 
   const field = (label, value, color = P.ink) => h_flex().min_w(0).gap(4).items_center()
-    .child(div().w(28).flex_none().whitespace_nowrap().text_size(12).text_color(P.label).child(label))
+    .child(div().w(lang() === "zh" ? 28 : 46).flex_none().whitespace_nowrap().text_size(12).text_color(P.label).child(label))
     .child(typeof value === "string" ? div().min_w(0).truncate().text_size(12).text_color(color).child(value) : value);
 
   // 照片：白边相纸（1px 线 + 2px 白边）里正好放 48 头像，回形针别在左上
@@ -229,21 +221,21 @@ function card(t, a, mid, tab, now, dmg, stat, no) {
     .child(h_flex().gap(6).items_center()
       .child(photo)
       .child(v_flex().flex_1().min_w(0).gap(1)
-        .child(field("代号", m.name))
-        .child(field("程序", progName(a)))
-        .child(field("驻地", place(a)))))
+        .child(field(S().fields.name, monsterName(m)))
+        .child(field(S().fields.program, progName(a)))
+        .child(field(S().fields.base, place(a)))))
     .child(dashes)
-    .child(field("任务", what || "未登记", what ? P.ink : P.label))
-    .child(field("状况", time || QUIP[a.status] || QUIP.idle))
-    .child(field("损坏", slot != null ? damageBar(t, dmg ?? 0, P) : div().text_size(12).text_color(P.label).child("场外")))
-    .child(field("战绩", `拆 ${stat?.razed ?? 0} 栋 · 今天 ${dur(workTime(stat, now))}`));
+    .child(field(S().fields.task, what || S().noTask, what ? P.ink : P.label))
+    .child(field(S().fields.status, time || QUIP()[a.status] || QUIP().idle))
+    .child(field(S().fields.damage, slot != null ? damageBar(t, dmg ?? 0, P) : div().text_size(12).text_color(P.label).child(S().offMap)))
+    .child(field(S().fields.record, S().record(stat?.razed ?? 0, dur(workTime(stat, now)))));
 
   // 文件夹标签
   const folderTab = h_flex().child(div().h(16).px(6).flex().items_center().bg(P.tab).border(2).border_b(0).border_color(edge)
     .text_size(12).text_color(P.ink).child(`No.${String(no).padStart(3, "0")}`));
 
   return v_flex().id(`card-${a.address}`).w(CARD_W + 3).flex_none().cursor_pointer()
-    .tooltip(`${m.name} · ${progName(a)}${what ? ` · ${what}` : ""}`)
+    .tooltip(`${monsterName(m)} · ${progName(a)}${what ? ` · ${what}` : ""}`)
     .on_mouse_down("left", stop)
     .on_click(() => run("pane.focus", { pane: a.pane }))
     .child(folderTab)
@@ -259,7 +251,7 @@ function tile(t, a, mid, what) {
   const m = monsterOf(mid);
   const edge = a.focused ? t.input : BADGE[a.status] ?? P.line;
   return div().id(`tile-${a.address}`).relative().flex_none().pr(2).pb(2).cursor_pointer()
-    .tooltip(`${m.name} · ${progName(a)} · ${STATUS_TEXT[a.status] ?? "睡觉中"}${what ? ` · ${what}` : ""}`)
+    .tooltip(`${monsterName(m)} · ${progName(a)} · ${statusText(a.status) ?? S().status.idle}${what ? ` · ${what}` : ""}`)
     .on_mouse_down("left", stop)
     .on_click(() => run("pane.focus", { pane: a.pane }))
     .child(div().absolute().left(2).top(2).right(0).bottom(0).bg(shadowColor(t)))
@@ -284,7 +276,7 @@ function spaceHeader(t, s, i) {
   return h_flex().id(`sp-${s.id}`).h(28).px(6).gap(8).flex_none().items_center().cursor_pointer()
     .when(s.active, (el) => el.bg(t.selected))
     .when(!s.active, (el) => el.hover((st) => st.bg(t.hover)))
-    .tooltip(slot == null ? `${s.name}（不在沙盘上）` : s.name)
+    .tooltip(slot == null ? S().offMapTip(s.name) : s.name)
     .on_mouse_down("left", stop)
     .on_click(() => run("space.select", { id: s.id }))
     .on_mouse_down("right", spaceMenu(s))
@@ -292,6 +284,12 @@ function spaceHeader(t, s, i) {
     .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.foreground).child(s.name))
     .child(div().flex_none().text_size(12).text_color(t.dim).child(hotkey(i)));
 }
+
+// 语言切换：名册右上的小字按钮 / language toggle: a small text button in the roster header
+const langButton = (t) => div().id("ros-lang").h(32).px(6).flex_none().flex().items_center().justify_center().text_size(12)
+  .text_color(t.muted).cursor_pointer().hover((st) => st.bg(t.hover).text_color(t.foreground))
+  .tooltip(S().langTip).on_mouse_down("left", stop).on_click(toggleLang)
+  .child(S().langButton);
 
 const button = (t, id, icon, tip, action) => div().id(id).size(32).flex_none().flex().items_center().justify_center()
   .text_color(t.muted).cursor_pointer().hover((st) => st.bg(t.hover).text_color(t.foreground))
@@ -329,9 +327,9 @@ export function roster(view, t, cx) {
     return v_flex().size_full().items_center().pt(lights ? 50 : 12).pb(12).gap(6)
       .child(v_flex().id("rail-list").flex_1().min_h(0).w_full().items_center().gap(6).overflow_y_scrollbar()
         .children(spaces().map(railTile)))
-      .child(button(t, "rail-new", "mods/workspace-chrome/plus.svg", "新建 space", () => run("space.new")))
-      .child(button(t, "rail-settings", "mods/workspace-chrome/settings.svg", "设置", () => run("app.settings")))
-      .child(button(t, "rail-open", "mods/workspace-chrome/chevron-right.svg", "展开（⌘B）", toggleSidebar));
+      .child(button(t, "rail-new", "mods/workspace-chrome/plus.svg", S().newSpace, () => run("space.new")))
+      .child(button(t, "rail-settings", "mods/workspace-chrome/settings.svg", S().settings, () => run("app.settings")))
+      .child(button(t, "rail-open", "mods/workspace-chrome/chevron-right.svg", S().expand, toggleSidebar));
   }
 
   // 档案编号 = Agent 在列表里的顺序
@@ -350,13 +348,14 @@ export function roster(view, t, cx) {
   });
   return v_flex().size_full().px(10).pb(8)
     .child(h_flex().h(26).flex_none().items_center().justify_between()
-      .child(div().text_size(12).text_color(t.dim).child("怪兽名册"))
+      .child(div().text_size(12).text_color(t.dim).child(S().roster))
       .child(h_flex().gap(2)
+        .child(langButton(t))
         .child(button(t, "ros-mode", mini ? "mods/kaiju/icons/file.svg" : "mods/kaiju/icons/grid.svg",
-          mini ? "展开成档案卡" : "折叠成头像", () => setShared(MODE, mini ? "file" : "mini")))
-        .child(button(t, "ros-new", "mods/workspace-chrome/plus.svg", "新建 space", () => run("space.new")))
-        .child(button(t, "ros-close", "mods/workspace-chrome/chevron-left.svg", "收起（⌘B）", toggleSidebar))))
+          mini ? S().toCards : S().toMini, () => setShared(MODE, mini ? "file" : "mini")))
+        .child(button(t, "ros-new", "mods/workspace-chrome/plus.svg", S().newSpace, () => run("space.new")))
+        .child(button(t, "ros-close", "mods/workspace-chrome/chevron-left.svg", S().collapse, toggleSidebar))))
     .child(v_flex().id("ros-list").flex_1().min_h(0).gap(10).overflow_y_scrollbar()
       .children(groups)
-      .when(list.length === 0, (el) => el.child(div().px(6).py(4).text_size(12).text_color(t.dim).child("还没有运行中的 Agent"))));
+      .when(list.length === 0, (el) => el.child(div().px(6).py(4).text_size(12).text_color(t.dim).child(S().noAgents))));
 }
