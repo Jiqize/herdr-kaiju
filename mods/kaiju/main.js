@@ -23,8 +23,9 @@ export default class Kaiju extends View {
       cx.spawn(async (cx) => {
         for (;;) {
           const c = await nextCommand();
-          if (c.endsWith("toggle")) toggleSidebar();
-          else if (c.endsWith("lang")) toggleLang();
+          if (c === "toggle") toggleSidebar();
+          else if (c === "lang") toggleLang();
+          else continue;
           cx.notify();
         }
       });

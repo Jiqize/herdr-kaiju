@@ -286,7 +286,7 @@ function spaceHeader(t, s, i) {
 }
 
 // 语言切换：名册右上的小字按钮 / language toggle: a small text button in the roster header
-const langButton = (t) => div().id("ros-lang").h(32).px(6).flex_none().flex().items_center().justify_center().text_size(12)
+const langButton = (t, id) => div().id(id).h(32).px(6).flex_none().flex().items_center().justify_center().text_size(12)
   .text_color(t.muted).cursor_pointer().hover((st) => st.bg(t.hover).text_color(t.foreground))
   .tooltip(S().langTip).on_mouse_down("left", stop).on_click(toggleLang)
   .child(S().langButton);
@@ -328,6 +328,7 @@ export function roster(view, t, cx) {
       .child(v_flex().id("rail-list").flex_1().min_h(0).w_full().items_center().gap(6).overflow_y_scrollbar()
         .children(spaces().map(railTile)))
       .child(button(t, "rail-new", "mods/workspace-chrome/plus.svg", S().newSpace, () => run("space.new")))
+      .child(langButton(t, "rail-lang"))
       .child(button(t, "rail-settings", "mods/workspace-chrome/settings.svg", S().settings, () => run("app.settings")))
       .child(button(t, "rail-open", "mods/workspace-chrome/chevron-right.svg", S().expand, toggleSidebar));
   }
@@ -347,10 +348,10 @@ export function roster(view, t, cx) {
           : card(t, a, mids.get(a.address), tabs.get(a.tab), now, damage[a.space], stats[a.address], no.get(a.address))))));
   });
   return v_flex().size_full().px(10).pb(8)
-    .child(h_flex().h(26).flex_none().items_center().justify_between()
+    .child(h_flex().h(32).flex_none().items_center().justify_between()
       .child(div().text_size(12).text_color(t.dim).child(S().roster))
       .child(h_flex().gap(2)
-        .child(langButton(t))
+        .child(langButton(t, "ros-lang"))
         .child(button(t, "ros-mode", mini ? "mods/kaiju/icons/file.svg" : "mods/kaiju/icons/grid.svg",
           mini ? S().toCards : S().toMini, () => setShared(MODE, mini ? "file" : "mini")))
         .child(button(t, "ros-new", "mods/workspace-chrome/plus.svg", S().newSpace, () => run("space.new")))
