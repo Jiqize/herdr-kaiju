@@ -3,7 +3,8 @@
 import { div, image } from "gpui-kit";
 import { spaces, agents, setAgentOrder, run, props, shared, setShared } from "herdr";
 import M from "./manifest.js";
-import { asset, assign, behaviors, monsterOf, STATUS_TEXT } from "./state.js";
+import { asset, assign, behaviors, monsterOf, statusText } from "./state.js";
+import { monsterName } from "./strings.js";
 // 怪兽和楼按前后关系叠放；出场的只有 working / done / blocked
 
 const W = M.canvas.w;
@@ -207,7 +208,7 @@ export function city(view, t, cx) {
       const m = monsterOf(mids.get(a.address));
       const h = SP.h - m.top;
       stage.child(div().id(`mhit-${a.address}`).absolute().left(b.spot.x - 18).top(b.spot.y - h).w(36).h(h)
-        .cursor_pointer().tooltip(`${m.name} · ${a.program?.name ?? a.app ?? "Agent"} · ${STATUS_TEXT[a.status] ?? ""}`)
+        .cursor_pointer().tooltip(`${monsterName(m)} · ${a.program?.name ?? a.app ?? "Agent"} · ${statusText(a.status) ?? ""}`)
         .on_mouse_down("left", stop)
         .on_click(() => a.pane && run("pane.focus", { pane: a.pane })));
       continue;

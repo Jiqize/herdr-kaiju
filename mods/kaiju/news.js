@@ -5,6 +5,7 @@ import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, props, run } from "herdr";
 import { asset, assign, monsterOf } from "./state.js";
+import { S, monsterName } from "./strings.js";
 
 const HOT = (s) => s === "done" || s === "blocked";
 const MAX = 3;
@@ -46,7 +47,7 @@ export function news(view, t, cx) {
     const a = live.get(it.address) ?? it;
     const m = monsterOf(demo ? it.monster : mids.get(it.address));
     const where = a.space_name ?? "";
-    const title = a.status === "blocked" ? `${m.name}在 ${where} 区等你` : `${m.name}拆完了 ${where} 区`;
+    const title = a.status === "blocked" ? S().newsBlocked(monsterName(m), where) : S().newsDone(monsterName(m), where);
     return h_flex().id(`news-${it.address}`).h(48).px(6).gap(8).items_center().cursor_pointer()
       .hover((s) => s.bg(t.hover))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
@@ -61,7 +62,7 @@ export function news(view, t, cx) {
           .child(image(asset(t, m.face)).size(32))))
       .child(v_flex().flex_1().min_w(0)
         .child(h_flex().min_w(0).text_size(12)
-          .child(div().flex_none().text_color(RED).child("快讯｜"))
+          .child(div().flex_none().text_color(RED).child(S().newsTag))
           .child(div().min_w(0).truncate().text_color(t.foreground).child(title)))
         .child(div().truncate().text_size(12).text_color(t.dim).child(a.program?.name ?? a.app ?? "Agent")))
       .when(a.status === "blocked", (el) => el.child(div().size(6).flex_none().bg("#d8a548")));
@@ -73,12 +74,12 @@ export function news(view, t, cx) {
     .child(div().h(3).mx(6).bg(RED))
     .child(v_flex().p(4).gap(2)
       .child(h_flex().h(20).px(6).items_center().justify_between()
-        .child(div().text_size(12).text_color(t.dim).child("怪兽快讯"))
+        .child(div().text_size(12).text_color(t.dim).child(S().newsTitle))
         .child(div().id("news-clear").p(3).cursor_pointer().text_color(t.dim)
           .hover((s) => s.bg(t.hover).text_color(t.foreground))
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click((_e, cx) => { if (!demo) { n.items = []; cx.notify(); } })
           .child(svg("mods/workspace-chrome/x.svg").size(12))))
       .children(n.items.slice(0, MAX).map(row))
-      .when(more > 0, (el) => el.child(div().px(6).pb(2).text_size(12).text_color(t.dim).child(`还有 ${more} 条`))));
+      .when(more > 0, (el) => el.child(div().px(6).pb(2).text_size(12).text_color(t.dim).child(S().more(more)))));
 }

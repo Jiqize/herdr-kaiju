@@ -7,6 +7,7 @@ import { spaces, panes, agents, run, openOverlay, shared, layout } from "herdr";
 import M from "./manifest.js";
 import { asset, assign, monsterOf, slotOf, slotColor, shadowColor, FACE, find } from "./state.js";
 import { miniBuilding, BADGE } from "./roster.js";
+import { S } from "./strings.js";
 
 const stop = (_e, cx) => cx.stop_propagation();
 
@@ -49,7 +50,7 @@ export function top(view, t) {
 
   const pill = space
     ? hard("kj-space", h_flex().h(32).pl(8).pr(12).gap(8).items_center().bg(t.surface).border(2).border_color(color)
-        .cursor_pointer().tooltip("点击重命名")
+        .cursor_pointer().tooltip(S().rename)
         .on_mouse_down("left", stop)
         .on_click(() => run("space.rename", { id: space.id }))
         .child(miniBuilding(color, 20))
@@ -108,7 +109,7 @@ export function top(view, t) {
     .child(h_flex().min_w(0).gap(6).items_center()
       .child(pill)
       .child(h_flex().id("kj-tabs").min_w(0).gap(4).items_center().overflow_x_scrollbar().children(tabs.map(tab)))
-      .child(iconButton("kj-tab-new", "mods/workspace-chrome/plus.svg", "新建 tab", false,
+      .child(iconButton("kj-tab-new", "mods/workspace-chrome/plus.svg", S().newTab, false,
         () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 }))))
     .child(h_flex().absolute().right(12).top(0).bottom(0).gap(4).items_center()
       .when(enabled.includes("files"), (el) => el.child(panelButton("files", "mods/files/file.svg", "Files")))

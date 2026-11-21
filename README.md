@@ -38,6 +38,13 @@ herdr-app do layout.switch '{"name":"kaiju"}'
 | `ctrl-shift-l` | 切换布局 · switch layout |
 | 点楼 / click a building | 切到这个 space · select its space |
 | 点怪兽或名册卡片 / click a monster or card | 跳到它的窗格 · focus its pane |
+| 名册右上的 `EN` / `中` · the `EN` / `中` button in the roster header | 切换界面语言 · switch the UI language |
+
+## 语言 / Language
+
+界面默认中文。点名册右上角的 `EN`，或运行 `herdr-app do kaiju.lang`，切换到英文；再点一次切回来。选择存在 `shared("kaiju.lang")` 里，重启后保留。文字都在 `mods/kaiju/strings.js`，要加语言就在那里加一张表。
+
+The UI is Chinese by default. Click `EN` in the roster header, or run `herdr-app do kaiju.lang`, to switch to English; click again to switch back. The choice lives in `shared("kaiju.lang")` and survives restarts. All strings are in `mods/kaiju/strings.js`; add a table there to add a language.
 
 ## 换怪兽 / Swap the monsters
 
